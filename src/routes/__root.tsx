@@ -1,5 +1,5 @@
 // src/routes/__root.tsx
-// Root route — app shell + QueryClient + Toaster + Error/404
+// Root route — app shell + QueryClient + Toaster + Error/404 + SW + Error Logger
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -16,15 +16,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initErrorLogger, logError } from "../lib/error-logger";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1
-          className="text-7xl"
-          style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
-        >
+        <h1 className="text-7xl" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
           ৪০৪
         </h1>
         <h2 className="mt-4 text-xl font-semibold">পেজটি পাওয়া যায়নি</h2>
@@ -50,6 +48,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    logError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -115,6 +114,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icon-192.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -140,19 +141,31 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event !== "SIGNED_IN" &&
-        event !== "SIGNED_OUT" &&
-        event !== "USER_UPDATED"
-      )
-        return;
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
     });
     return () => data.subscription.unsubscribe();
   }, [router, queryClient]);
+
+  // Service Worker register (PWA)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") return;
+
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Silent fail — SW optional
+    });
+  }, []);
+
+  // Error logger init — global error handlers
+  useEffect(() => {
+    initErrorLogger();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

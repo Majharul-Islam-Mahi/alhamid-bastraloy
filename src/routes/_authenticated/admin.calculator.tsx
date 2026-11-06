@@ -1,9 +1,10 @@
 // src/routes/_authenticated/admin.calculator.tsx
-// সুন্দর ক্যালকুলেটর — basic + % সহ
+// সুন্দর ক্যালকুলেটর — basic + % সহ + Back button
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Calculator, RotateCcw, Delete, History } from "lucide-react";
 import { toBnDigits, toEnDigits } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 
 export const Route = createFileRoute("/_authenticated/admin/calculator")({
   head: () => ({ meta: [{ title: "ক্যালকুলেটর — আল হামিদ বস্ত্রালয়" }] }),
@@ -32,7 +33,7 @@ function CalculatorPage() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   function inputDigit(d: string) {
     if (waitingForOperand) {
@@ -123,7 +124,6 @@ function CalculatorPage() {
 
   function formatNumber(n: number): string {
     if (!isFinite(n)) return "Error";
-    // ২ দশমিক পর্যন্ত, তারপর zero বাদ
     const fixed = Math.round(n * 100) / 100;
     return String(fixed);
   }
@@ -136,19 +136,18 @@ function CalculatorPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      {/* Header with Back */}
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
         <div className="flex items-center gap-2">
           <Calculator className="h-7 w-7 text-primary" />
-          <h1
-            className="text-3xl"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
-          >
+          <h1 className="text-3xl" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
             ক্যালকুলেটর
           </h1>
         </div>
         <button
           onClick={() => setIsBangla(!isBangla)}
-          className="rounded-full border px-3 py-1 text-xs font-medium"
+          className="ml-auto rounded-full border px-3 py-1 text-xs font-medium"
           style={{
             borderColor: "#c9924a",
             color: "#c9924a",
@@ -175,16 +174,11 @@ function CalculatorPage() {
             minHeight: "110px",
           }}
         >
-          {/* History line */}
-          <p
-            className="text-right text-sm"
-            style={{ color: "#c9924a", minHeight: "20px" }}
-          >
+          <p className="text-right text-sm" style={{ color: "#c9924a", minHeight: "20px" }}>
             {previous !== null && operator
               ? `${displayBn(String(previous))} ${opSymbol(operator)}`
               : "\u00A0"}
           </p>
-          {/* Main display */}
           <p
             className="mt-2 break-all text-right text-4xl font-bold tabular-nums"
             style={{
@@ -196,7 +190,6 @@ function CalculatorPage() {
           >
             {displayValue}
           </p>
-          {/* Memory */}
           {memory !== 0 && (
             <p className="mt-1 text-right text-[10px]" style={{ color: "#c9924a" }}>
               M: {displayBn(String(memory))}
@@ -206,7 +199,6 @@ function CalculatorPage() {
 
         {/* Buttons Grid */}
         <div className="grid grid-cols-4 gap-2">
-          {/* Row 1: Clear, Backspace, %, ÷ */}
           <CalcBtn onClick={clearAll} variant="danger">
             AC
           </CalcBtn>
@@ -224,16 +216,9 @@ function CalculatorPage() {
             ÷
           </CalcBtn>
 
-          {/* Row 2: 7 8 9 × */}
-          <CalcBtn onClick={() => inputDigit("7")}>
-            {displayBn("7")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("8")}>
-            {displayBn("8")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("9")}>
-            {displayBn("9")}
-          </CalcBtn>
+          <CalcBtn onClick={() => inputDigit("7")}>{displayBn("7")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("8")}>{displayBn("8")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("9")}>{displayBn("9")}</CalcBtn>
           <CalcBtn
             onClick={() => performOp("*")}
             variant="operator"
@@ -242,16 +227,9 @@ function CalculatorPage() {
             ×
           </CalcBtn>
 
-          {/* Row 3: 4 5 6 − */}
-          <CalcBtn onClick={() => inputDigit("4")}>
-            {displayBn("4")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("5")}>
-            {displayBn("5")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("6")}>
-            {displayBn("6")}
-          </CalcBtn>
+          <CalcBtn onClick={() => inputDigit("4")}>{displayBn("4")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("5")}>{displayBn("5")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("6")}>{displayBn("6")}</CalcBtn>
           <CalcBtn
             onClick={() => performOp("-")}
             variant="operator"
@@ -260,16 +238,9 @@ function CalculatorPage() {
             −
           </CalcBtn>
 
-          {/* Row 4: 1 2 3 + */}
-          <CalcBtn onClick={() => inputDigit("1")}>
-            {displayBn("1")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("2")}>
-            {displayBn("2")}
-          </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("3")}>
-            {displayBn("3")}
-          </CalcBtn>
+          <CalcBtn onClick={() => inputDigit("1")}>{displayBn("1")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("2")}>{displayBn("2")}</CalcBtn>
+          <CalcBtn onClick={() => inputDigit("3")}>{displayBn("3")}</CalcBtn>
           <CalcBtn
             onClick={() => performOp("+")}
             variant="operator"
@@ -278,16 +249,16 @@ function CalculatorPage() {
             +
           </CalcBtn>
 
-          {/* Row 5: 00, 0, ., = */}
-          <CalcBtn onClick={() => { inputDigit("0"); inputDigit("0"); }}>
+          <CalcBtn
+            onClick={() => {
+              inputDigit("0");
+              inputDigit("0");
+            }}
+          >
             {displayBn("00")}
           </CalcBtn>
-          <CalcBtn onClick={() => inputDigit("0")}>
-            {displayBn("0")}
-          </CalcBtn>
-          <CalcBtn onClick={inputDot}>
-            {isBangla ? "." : "."}
-          </CalcBtn>
+          <CalcBtn onClick={() => inputDigit("0")}>{displayBn("0")}</CalcBtn>
+          <CalcBtn onClick={inputDot}>{isBangla ? "." : "."}</CalcBtn>
           <CalcBtn onClick={performEqual} variant="equal">
             =
           </CalcBtn>

@@ -1,12 +1,6 @@
 // src/components/ui/confirm-provider.tsx
 // সুন্দর কাস্টম confirm dialog — browser-এর default এর বদলে
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 
 type ConfirmOptions = {
@@ -100,8 +94,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <div
               className="flex items-center gap-2 px-5 py-3"
               style={{
-                background:
-                  "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))",
+                background: "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))",
                 borderBottom: "1px solid #dbcbb2",
               }}
             >

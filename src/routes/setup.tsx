@@ -50,15 +50,42 @@ function Setup() {
       <SiteHeader />
       <main className="flex items-center justify-center px-4 py-16">
         <div className="w-full max-w-md rounded-2xl bg-card p-8 shadow-soft">
-          <h1 className="mb-6 text-center font-display text-3xl text-primary">মালিক অ্যাকাউন্ট সেটআপ</h1>
+          <h1 className="mb-6 text-center font-display text-3xl text-primary">
+            মালিক অ্যাকাউন্ট সেটআপ
+          </h1>
           {data?.exists ? (
             <p className="text-center text-muted-foreground">সেটআপ আগেই সম্পন্ন হয়েছে।</p>
           ) : (
             <form onSubmit={submit} className="space-y-4">
-              <div className="space-y-1.5"><Label>নাম</Label><Input value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} required /></div>
-              <div className="space-y-1.5"><Label>মোবাইল নম্বর</Label><Input value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} placeholder="01716782247" required /></div>
-              <div className="space-y-1.5"><Label>পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</Label><Input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required /></div>
-              <Button variant="coffee" size="lg" className="w-full" disabled={busy}>অ্যাকাউন্ট তৈরি করুন</Button>
+              <div className="space-y-1.5">
+                <Label>নাম</Label>
+                <Input
+                  value={f.full_name}
+                  onChange={(e) => setF({ ...f, full_name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>মোবাইল নম্বর</Label>
+                <Input
+                  value={f.mobile}
+                  onChange={(e) => setF({ ...f, mobile: e.target.value })}
+                  placeholder="01716782247"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</Label>
+                <Input
+                  type="password"
+                  value={f.password}
+                  onChange={(e) => setF({ ...f, password: e.target.value })}
+                  required
+                />
+              </div>
+              <Button variant="coffee" size="lg" className="w-full" disabled={busy}>
+                অ্যাকাউন্ট তৈরি করুন
+              </Button>
             </form>
           )}
         </div>

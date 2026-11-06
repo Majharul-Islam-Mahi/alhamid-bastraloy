@@ -141,9 +141,7 @@ export function NoticePopup() {
   return (
     <div
       className={`fixed right-4 top-20 z-50 w-[340px] max-w-[calc(100vw-2rem)] transition-all duration-300 ${
-        visible
-          ? "translate-x-0 opacity-100"
-          : "pointer-events-none translate-x-full opacity-0"
+        visible ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0"
       }`}
       role="alert"
     >
@@ -163,9 +161,7 @@ export function NoticePopup() {
           }}
         >
           {cfg.icon}
-          <span className="text-xs font-semibold uppercase tracking-wide">
-            {cfg.label}
-          </span>
+          <span className="text-xs font-semibold uppercase tracking-wide">{cfg.label}</span>
           <button
             onClick={close}
             className="ml-auto rounded-full p-1 hover:bg-white/20"
@@ -199,8 +195,7 @@ export function NoticePopup() {
               onClick={close}
               className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition hover:brightness-110"
               style={{
-                background:
-                  "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
+                background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
                 color: "#f8f3ea",
               }}
             >
@@ -221,8 +216,7 @@ export function NoticePopup() {
             <div
               className="h-full"
               style={{
-                background:
-                  "linear-gradient(90deg, #c9924a, #d9a85a)",
+                background: "linear-gradient(90deg, #c9924a, #d9a85a)",
                 animation: "shrink 30s linear forwards",
               }}
             />

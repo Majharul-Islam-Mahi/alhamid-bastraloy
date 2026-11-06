@@ -1,28 +1,14 @@
 // src/routes/_authenticated/admin.collection.tsx
-// এলাকা-ভিত্তিক কালেকশন entry — আজকের এলাকা auto detect
+// এলাকা-ভিত্তিক কালেকশন entry — আজকের এলাকা auto detect + Back button
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
-import {
-  HandCoins,
-  Save,
-  CheckCircle2,
-  AlertCircle,
-  ArrowLeft,
-  User,
-  Calendar,
-} from "lucide-react";
+import { HandCoins, Save, AlertCircle, ArrowLeft, User, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
-import {
-  taka,
-  toBnDigits,
-  todayISO,
-  englishDateBn,
-  weekdayBn,
-  num,
-} from "@/lib/shop";
+import { taka, toBnDigits, todayISO, englishDateBn, weekdayBn, num } from "@/lib/shop";
 import { partyDue } from "@/lib/ledger";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -60,13 +46,11 @@ function CollectionPage() {
   const [busy, setBusy] = useState(false);
   const [dues, setDues] = useState<Record<string, number>>({});
 
-  // আজকের বার
   const dayOfWeek = useMemo(() => {
     const d = new Date(selectedDate + "T00:00:00");
-    return d.getDay(); // 0=Sun..6=Sat
+    return d.getDay();
   }, [selectedDate]);
 
-  // সব এলাকা
   const { data: allAreas = [] } = useQuery({
     queryKey: ["areas-all"],
     queryFn: async () =>
@@ -76,23 +60,20 @@ function CollectionPage() {
           .select("id,name,name_bn,day_of_week")
           .eq("active", true)
           .order("sort_order")
-      ).data ?? [] as Area[],
+      ).data ?? ([] as Area[]),
   });
 
-  // আজকের এলাকা
   const todayAreas = useMemo(
     () => allAreas.filter((a) => a.day_of_week === dayOfWeek),
     [allAreas, dayOfWeek],
   );
 
-  // আজকের এলাকা auto-select
   useEffect(() => {
     if (todayAreas.length > 0 && !selectedAreaId) {
-      setSelectedAreaId(todayAreas[0].id);
+      setSelectedAreaId(todayAreas[0]?.id ?? "");
     }
   }, [todayAreas, selectedAreaId]);
 
-  // এলাকার কাস্টমার
   const { data: parties = [] } = useQuery({
     queryKey: ["parties-by-area", selectedAreaId],
     enabled: !!selectedAreaId,
@@ -104,10 +85,9 @@ function CollectionPage() {
           .eq("area_id", selectedAreaId)
           .in("kind", ["wholesale", "retail"])
           .order("serial")
-      ).data ?? [] as Party[],
+      ).data ?? ([] as Party[]),
   });
 
-  // প্রতিটা কাস্টমারের বাকি
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -122,21 +102,14 @@ function CollectionPage() {
     };
   }, [parties]);
 
-  // মোট collection
   const totalCollection = useMemo(() => {
-    return Object.values(entries).reduce(
-      (s, v) => s + num(v),
-      0,
-    );
+    return Object.values(entries).reduce((s, v) => s + num(v), 0);
   }, [entries]);
 
-  const filledCount = Object.values(entries).filter(
-    (v) => num(v) > 0,
-  ).length;
+  const filledCount = Object.values(entries).filter((v) => num(v) > 0).length;
 
   const currentArea = allAreas.find((a) => a.id === selectedAreaId);
 
-  // ==== Save collection ====
   async function saveCollection() {
     if (!selectedAreaId) {
       toast.error("এলাকা select করুন");
@@ -149,7 +122,6 @@ function CollectionPage() {
 
     setBusy(true);
     try {
-      // ১. collection batch তৈরি
       const { data: collection, error: cErr } = await supabase
         .from("collections")
         .insert({
@@ -166,7 +138,6 @@ function CollectionPage() {
 
       if (cErr || !collection) throw new Error("কালেকশন সেভ হয়নি: " + cErr?.message);
 
-      // ২. প্রতিটা item + day_entries তৈরি
       const items = Object.entries(entries)
         .map(([party_id, amount]) => ({
           party_id,
@@ -178,7 +149,6 @@ function CollectionPage() {
         const party = parties.find((p) => p.id === item.party_id);
         if (!party) continue;
 
-        // day_entries এ deposit entry
         const { data: dayEntry, error: dErr } = await supabase
           .from("day_entries")
           .insert({
@@ -196,7 +166,6 @@ function CollectionPage() {
 
         if (dErr) throw new Error("Entry সেভ হয়নি: " + dErr.message);
 
-        // collection_items এ reference
         await supabase.from("collection_items").insert({
           collection_id: collection.id,
           party_id: party.id,
@@ -211,12 +180,10 @@ function CollectionPage() {
         `✅ কালেকশন সেভ হয়েছে — ${filledCount} জন কাস্টমার, মোট ${taka(totalCollection)}`,
       );
 
-      // refresh
       qc.invalidateQueries({ queryKey: ["day-entries"] });
       qc.invalidateQueries({ queryKey: ["day-summary"] });
       qc.invalidateQueries({ queryKey: ["party-due"] });
 
-      // reset
       setEntries({});
       setNotes("");
       nav({ to: "/admin/collection/history" });
@@ -229,28 +196,23 @@ function CollectionPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      {/* Toolbar */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <HandCoins className="h-7 w-7 text-primary" />
-          <h1
-            className="text-3xl"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
-          >
-            কালেকশন
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Toolbar with Back */}
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <h1
+          className="text-2xl md:text-3xl"
+          style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
+        >
+          কালেকশন
+        </h1>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
             className="h-9 rounded-md border bg-card px-3 text-sm"
           />
-          <Button
-            variant="outline"
-            onClick={() => nav({ to: "/admin/collection/history" })}
-          >
+          <Button variant="outline" onClick={() => nav({ to: "/admin/collection/history" })}>
             <ArrowLeft /> হিসাব দেখুন
           </Button>
         </div>
@@ -297,7 +259,8 @@ function CollectionPage() {
                   .filter((a) => a.day_of_week !== dayOfWeek)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name_bn || a.name} ({["রবি","সোম","মঙ্গল","বুধ","বৃহঃ","শুক্র","শনি"][a.day_of_week]})
+                      {a.name_bn || a.name} (
+                      {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
                     </option>
                   ))}
               </optgroup>
@@ -341,8 +304,7 @@ function CollectionPage() {
           <div
             className="border-b px-4 py-3"
             style={{
-              background:
-                "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))",
+              background: "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))",
             }}
           >
             <h2
@@ -355,18 +317,13 @@ function CollectionPage() {
 
           <div className="table-scroll">
             <table className="w-full min-w-[720px] text-sm">
-              <thead
-                className="text-xs"
-                style={{ backgroundColor: "#e8dcc8", color: "#3a2318" }}
-              >
+              <thead className="text-xs" style={{ backgroundColor: "#e8dcc8", color: "#3a2318" }}>
                 <tr>
-                  <th className="px-3 py-2 text-left w-14">ক্রম</th>
+                  <th className="w-14 px-3 py-2 text-left">ক্রম</th>
                   <th className="px-3 py-2 text-left">সিরিয়াল</th>
                   <th className="px-3 py-2 text-left">দোকানের নাম</th>
                   <th className="px-3 py-2 text-right">মোট বাকি</th>
-                  <th className="px-3 py-2 text-right w-40">
-                    আজ কত দিলো (৳)
-                  </th>
+                  <th className="w-40 px-3 py-2 text-right">আজ কত দিলো (৳)</th>
                 </tr>
               </thead>
               <tbody>
@@ -377,42 +334,25 @@ function CollectionPage() {
                   return (
                     <tr
                       key={p.id}
-                      className={`border-t transition ${
-                        amount > 0 ? "bg-green-50" : ""
-                      }`}
+                      className={`border-t transition ${amount > 0 ? "bg-green-50" : ""}`}
                     >
-                      <td
-                        className="px-3 py-2 tabular-nums"
-                        style={{ color: "#7a6558" }}
-                      >
+                      <td className="px-3 py-2 tabular-nums" style={{ color: "#7a6558" }}>
                         {toBnDigits(i + 1)}
                       </td>
-                      <td
-                        className="px-3 py-2 tabular-nums"
-                        style={{ color: "#3a2318" }}
-                      >
+                      <td className="px-3 py-2 tabular-nums" style={{ color: "#3a2318" }}>
                         {toBnDigits(p.serial)}
                       </td>
                       <td className="px-3 py-2">
-                        <p
-                          className="font-semibold"
-                          style={{ color: "#3a2318" }}
-                        >
+                        <p className="font-semibold" style={{ color: "#3a2318" }}>
                           {p.shop_name}
                         </p>
                         {p.owner_name && (
-                          <p
-                            className="text-xs"
-                            style={{ color: "#7a6558" }}
-                          >
+                          <p className="text-xs" style={{ color: "#7a6558" }}>
                             {p.owner_name}
                           </p>
                         )}
                         {p.mobile && (
-                          <p
-                            className="text-xs tabular-nums"
-                            style={{ color: "#7a6558" }}
-                          >
+                          <p className="text-xs tabular-nums" style={{ color: "#7a6558" }}>
                             {toBnDigits(p.mobile)}
                           </p>
                         )}
@@ -436,9 +376,7 @@ function CollectionPage() {
                           }
                           placeholder="০"
                           className={`h-10 w-full rounded-md border bg-white px-2 text-right text-base font-semibold tabular-nums outline-none focus:ring-2 ${
-                            amount > 0
-                              ? "border-green-500 ring-green-200"
-                              : "border-[#dbcbb2]"
+                            amount > 0 ? "border-green-500 ring-green-200" : "border-[#dbcbb2]"
                           }`}
                           style={{ color: "#3a2318" }}
                         />
@@ -467,7 +405,7 @@ function CollectionPage() {
         </div>
       )}
 
-      {/* Notes + Save button */}
+      {/* Notes + Save */}
       {selectedAreaId && parties.length > 0 && (
         <div className="rounded-2xl border bg-card p-5 shadow-card">
           <label className="block text-sm">

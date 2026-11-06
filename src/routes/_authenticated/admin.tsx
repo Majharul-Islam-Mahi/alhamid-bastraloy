@@ -1,13 +1,9 @@
 // src/routes/_authenticated/admin.tsx
-// অ্যাডমিন লেআউট — Desktop Sidebar + Mobile Drawer + Notice Popup + ConfirmProvider
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useRouterState,
-} from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+// অ্যাডমিন লেআউট — Desktop Sidebar + Mobile Drawer + Notice Popup + ConfirmProvider + Badges
+// [UPDATED] Nav order: daily-use first, admin setup last
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import {
   BookOpen,
@@ -15,6 +11,9 @@ import {
   LogOut,
   NotebookPen,
   Package,
+  FolderTree,
+  Wand2,
+  Upload,
   Users,
   Home,
   TrendingUp,
@@ -23,12 +22,23 @@ import {
   Calculator,
   HandCoins,
   Calendar as CalendarLucide,
+  MessageSquareWarning,
+  MessageCircle,
+  History,
+  AlertTriangle,
+  Activity,
+  Wallet,
+  Truck,
+  ReceiptText,
+  Settings as SettingsIcon,
   Menu,
   X,
 } from "lucide-react";
 import { useMe } from "@/hooks/use-me";
 import { supabase } from "@/integrations/supabase/client";
 import { SHOP, roleLabel } from "@/lib/shop";
+import { reportsPendingCount } from "@/lib/reports.functions";
+import { chatUnreadCount } from "@/lib/chat.functions";
 import { toast } from "sonner";
 import { NoticePopup } from "@/components/admin/NoticePopup";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
@@ -38,26 +48,65 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
+// ============================================================
+// NAV ORDER — daily-use first, admin/setup last
+// ============================================================
 const nav = [
+  // --- TOP: Dashboard ---
   { to: "/admin", label: "ড্যাশবোর্ড", icon: LayoutDashboard, exact: true },
-  { to: "/admin/collection", label: "কালেকশন", icon: HandCoins },
+
+  // --- DAILY USE (most frequent) ---
   { to: "/admin/khata", label: "খুচরা খাতা", icon: NotebookPen },
+  { to: "/admin/cash", label: "ক্যাশ", icon: Wallet },
   { to: "/admin/memo", label: "মেমো বই", icon: BookOpen },
-  { to: "/admin/stock", label: "স্টক", icon: Package },
-  { to: "/admin/areas", label: "এলাকা", icon: MapPin },
-  { to: "/admin/calendar", label: "ক্যালেন্ডার", icon: CalendarLucide },
-  { to: "/admin/halkhata", label: "নোটিশ", icon: Bell },
+  { to: "/admin/collection", label: "কালেকশন", icon: HandCoins },
+  { to: "/admin/wholesale", label: "পাইকারি খাতা", icon: HandCoins },
+  { to: "/admin/dena", label: "দেনা খাতা", icon: Truck },
   { to: "/admin/calculator", label: "ক্যালকুলেটর", icon: Calculator },
-  { to: "/admin/reports", label: "রিপোর্ট", icon: TrendingUp },
+  { to: "/admin/calendar", label: "ক্যালেন্ডার", icon: CalendarLucide },
+  { to: "/admin/messages", label: "Messages", icon: MessageCircle },
+
+  // --- STOCK / INVENTORY ---
+  { to: "/admin/stock", label: "স্টক", icon: Package },
+  { to: "/admin/categories", label: "ক্যাটাগরি", icon: FolderTree },
+  { to: "/admin/paona", label: "খুচরা পাওনা", icon: ReceiptText },
+
+  // --- CUSTOMER / AREA ---
   { to: "/admin/users", label: "ইউজার ও কাস্টমার", icon: Users },
+  { to: "/admin/areas", label: "এলাকা", icon: MapPin },
+
+  // --- COMMUNICATION ---
+  { to: "/admin/halkhata", label: "নোটিশ", icon: Bell },
+
+  // --- REPORTS ---
+  { to: "/admin/reports", label: "রিপোর্ট", icon: TrendingUp },
+  {
+    to: "/admin/reports-list",
+    label: "কাস্টমার রিপোর্ট",
+    icon: MessageSquareWarning,
+  },
+
+  // --- TOOLS / IMPORT ---
+  { to: "/admin/migrate", label: "Migrate Tool", icon: Wand2 },
+  { to: "/admin/import", label: "Historical Import", icon: Upload },
+
+  // --- ADMIN / DIAGNOSTICS ---
+  { to: "/admin/settings", label: "সেটিংস", icon: SettingsIcon },
+  { to: "/admin/audit-logs", label: "Activity Log", icon: History },
+  { to: "/admin/error-logs", label: "Error Log", icon: AlertTriangle },
+  { to: "/admin/uptime", label: "Uptime", icon: Activity },
 ] as const;
 
+// Moderator অনুমোদিত page
 const allowedForModerator = [
   "/admin",
   "/admin/khata",
+  "/admin/cash",
   "/admin/collection",
   "/admin/calculator",
   "/admin/calendar",
+  "/admin/messages",
+  "/admin/reports-list",
 ];
 
 function AdminLayout() {
@@ -67,14 +116,48 @@ function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // ---- Role guard ----
+  // Pending reports count
+  const fetchPendingCount = useServerFn(reportsPendingCount);
+  const { data: pendingData } = useQuery({
+    queryKey: ["reports-pending-count"],
+    queryFn: () => fetchPendingCount(),
+    refetchInterval: 60 * 1000,
+    enabled: !!me?.isStaff,
+  });
+  const pendingReports = pendingData?.count ?? 0;
+
+  // Chat unread count
+  const fetchChatUnread = useServerFn(chatUnreadCount);
+  const { data: chatData } = useQuery({
+    queryKey: ["chat-unread-count"],
+    queryFn: () => fetchChatUnread(),
+    refetchInterval: 30 * 1000,
+    enabled: !!me?.isStaff,
+  });
+  const chatUnread = chatData?.count ?? 0;
+
+  // Pending memos count
+  const { data: pendingMemos = 0 } = useQuery({
+    queryKey: ["memos-pending-count"],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("memos")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "draft");
+      return count ?? 0;
+    },
+    refetchInterval: 60 * 1000,
+    enabled: !!me?.isStaff,
+  });
+
+  // Role guard
   useEffect(() => {
     if (!isLoading && me && !me.isStaff) {
       navigate({ to: "/account" });
     }
   }, [me, isLoading, navigate]);
 
-  // ---- Moderator restriction ----
+  // Moderator restriction
   useEffect(() => {
     if (!isLoading && me && me.isStaff && !me.isOwner) {
       const isAllowed = allowedForModerator.some(
@@ -87,7 +170,7 @@ function AdminLayout() {
     }
   }, [me, isLoading, pathname, navigate]);
 
-  // Close mobile drawer when route changes
+  // Close mobile drawer on route change
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
@@ -107,9 +190,7 @@ function AdminLayout() {
     );
   }
 
-  const visibleNav = me.isOwner
-    ? nav
-    : nav.filter((n) => allowedForModerator.includes(n.to));
+  const visibleNav = me.isOwner ? nav : nav.filter((n) => allowedForModerator.includes(n.to));
 
   return (
     <ConfirmProvider>
@@ -122,10 +203,7 @@ function AdminLayout() {
             color: "#f2e8d5",
           }}
         >
-          <div
-            className="border-b p-5"
-            style={{ borderColor: "#4a3324" }}
-          >
+          <div className="border-b p-5" style={{ borderColor: "#4a3324" }}>
             <p
               className="text-xl"
               style={{
@@ -156,7 +234,23 @@ function AdminLayout() {
                   },
                 }}
               >
-                <n.icon className="h-4 w-4" /> {n.label}
+                <n.icon className="h-4 w-4" />
+                <span className="flex-1">{n.label}</span>
+                {n.to === "/admin/reports-list" && pendingReports > 0 && (
+                  <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                    {pendingReports}
+                  </span>
+                )}
+                {n.to === "/admin/messages" && chatUnread > 0 && (
+                  <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                    {chatUnread}
+                  </span>
+                )}
+                {n.to === "/admin/memo" && pendingMemos > 0 && (
+                  <span className="rounded-full bg-yellow-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                    {pendingMemos}
+                  </span>
+                )}
               </Link>
             ))}
             <Link
@@ -168,10 +262,7 @@ function AdminLayout() {
             </Link>
           </nav>
 
-          <div
-            className="border-t p-4"
-            style={{ borderColor: "#4a3324" }}
-          >
+          <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
             <p className="font-semibold" style={{ color: "#f2e8d5" }}>
               {me.full_name}
             </p>
@@ -214,6 +305,24 @@ function AdminLayout() {
             >
               {SHOP.name}
             </p>
+            <Link
+              to="/admin/messages"
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
+              style={{ color: "#f2e8d5" }}
+              aria-label="Messages"
+            >
+              <MessageCircle className="h-5 w-5" />
+              {chatUnread > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                  {chatUnread}
+                </span>
+              )}
+            </Link>
+            {pendingReports > 0 && (
+              <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                {pendingReports}
+              </span>
+            )}
             <button
               onClick={logout}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
@@ -283,7 +392,23 @@ function AdminLayout() {
                         },
                       }}
                     >
-                      <n.icon className="h-4 w-4" /> {n.label}
+                      <n.icon className="h-4 w-4" />
+                      <span className="flex-1">{n.label}</span>
+                      {n.to === "/admin/reports-list" && pendingReports > 0 && (
+                        <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                          {pendingReports}
+                        </span>
+                      )}
+                      {n.to === "/admin/messages" && chatUnread > 0 && (
+                        <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                          {chatUnread}
+                        </span>
+                      )}
+                      {n.to === "/admin/memo" && pendingMemos > 0 && (
+                        <span className="rounded-full bg-yellow-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                          {pendingMemos}
+                        </span>
+                      )}
                     </Link>
                   ))}
                   <Link
@@ -295,10 +420,7 @@ function AdminLayout() {
                   </Link>
                 </nav>
 
-                <div
-                  className="border-t p-4"
-                  style={{ borderColor: "#4a3324" }}
-                >
+                <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
                   <p className="text-sm font-semibold" style={{ color: "#f2e8d5" }}>
                     {me.full_name}
                   </p>

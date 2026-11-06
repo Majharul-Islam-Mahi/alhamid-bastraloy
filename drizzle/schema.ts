@@ -23,9 +23,7 @@ export const profiles = pgTable("profiles", {
   mobile: text("mobile").notNull(),
   serial: text("serial"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- User Roles ----
@@ -46,9 +44,7 @@ export const parties = pgTable("parties", {
   location: text("location"),
   kind: text("kind").notNull(), // retail | wholesale | supplier | hawlat
   userId: uuid("user_id"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Products (স্টক) ----
@@ -58,9 +54,7 @@ export const products = pgTable("products", {
   quantity: numeric("quantity").notNull().default("0"),
   unit: text("unit").notNull().default("পিস"),
   unitPrice: numeric("unit_price").notNull().default("0"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Day Entries (খুচরা খাতা) ----
@@ -76,9 +70,7 @@ export const dayEntries = pgTable("day_entries", {
   }),
   memoId: uuid("memo_id"),
   createdBy: uuid("created_by"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Hawlat Entries (হাওলাত) ----
@@ -92,9 +84,7 @@ export const hawlatEntries = pgTable("hawlat_entries", {
   amount: numeric("amount").notNull().default("0"),
   note: text("note"),
   createdBy: uuid("created_by"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Supplier Entries (দেনা খাতা) ----
@@ -108,9 +98,7 @@ export const supplierEntries = pgTable("supplier_entries", {
   amount: numeric("amount").notNull().default("0"),
   details: text("details"),
   createdBy: uuid("created_by"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Memos (মেমো) ----
@@ -133,9 +121,7 @@ export const memos = pgTable("memos", {
   note: text("note"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   createdBy: uuid("created_by"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Memo Items (মেমোর পণ্য) ----
@@ -161,9 +147,7 @@ export const otpCodes = pgTable("otp_codes", {
   code: text("code").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   used: boolean("used").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Login Logs ----
@@ -171,9 +155,7 @@ export const loginLogs = pgTable("login_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
   userAgent: text("user_agent"),
-  loggedInAt: timestamp("logged_in_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  loggedInAt: timestamp("logged_in_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---- Shop Settings ----

@@ -1,28 +1,18 @@
 // src/routes/_authenticated/admin.collection.history.tsx
 // কালেকশনের ইতিহাস — কে কবে কোথায় কত টাকা collect করলো
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  History,
-  ArrowLeft,
-  Printer,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { History, Printer, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  taka,
-  toBnDigits,
-  englishDateBn,
-  weekdayBn,
-} from "@/lib/shop";
+import { taka, toBnDigits, englishDateBn, weekdayBn } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute(
-  "/_authenticated/admin/collection/history",
-)({
-  head: () => ({ meta: [{ title: "কালেকশন ইতিহাস — আল হামিদ বস্ত্রালয়" }] }),
+export const Route = createFileRoute("/_authenticated/admin/collection/history")({
+  head: () => ({
+    meta: [{ title: "কালেকশন ইতিহাস — আল হামিদ বস্ত্রালয়" }],
+  }),
   component: CollectionHistory,
 });
 
@@ -65,7 +55,7 @@ function CollectionHistory() {
           .lte("collection_date", to)
           .order("collection_date", { ascending: false })
           .order("created_at", { ascending: false })
-      ).data ?? [] as Collection[],
+      ).data ?? ([] as Collection[]),
   });
 
   const { data: items = [] } = useQuery({
@@ -81,7 +71,7 @@ function CollectionHistory() {
             collections.map((c) => c.id),
           )
           .order("created_at")
-      ).data ?? [] as CollectionItem[],
+      ).data ?? ([] as CollectionItem[]),
   });
 
   function itemsOf(cid: string) {
@@ -95,42 +85,38 @@ function CollectionHistory() {
     setExpanded(s);
   }
 
-  const grandTotal = collections.reduce(
-    (s, c) => s + Number(c.total_amount),
-    0,
-  );
+  const grandTotal = collections.reduce((s, c) => s + Number(c.total_amount), 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <History className="h-7 w-7 text-primary" />
-          <h1
-            className="text-3xl"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
-          >
-            কালেকশনের ইতিহাস
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Toolbar with Back */}
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin/collection" />
+        <h1
+          className="text-2xl md:text-3xl"
+          style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
+        >
+          কালেকশনের ইতিহাস
+        </h1>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={from}
             onChange={(e) => e.target.value && setFrom(e.target.value)}
             className="h-9 rounded-md border bg-card px-3 text-sm"
           />
-          <span className="text-sm" style={{ color: "#7a6558" }}>থেকে</span>
+          <span className="text-sm" style={{ color: "#7a6558" }}>
+            থেকে
+          </span>
           <input
             type="date"
             value={to}
             onChange={(e) => e.target.value && setTo(e.target.value)}
             className="h-9 rounded-md border bg-card px-3 text-sm"
           />
-          <Link to="/admin/collection">
-            <Button variant="outline">
-              <ArrowLeft /> নতুন কালেকশন
-            </Button>
-          </Link>
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer /> প্রিন্ট
+          </Button>
         </div>
       </div>
 
@@ -171,10 +157,7 @@ function CollectionHistory() {
           const isOpen = expanded.has(c.id);
           const cItems = itemsOf(c.id);
           return (
-            <div
-              key={c.id}
-              className="overflow-hidden rounded-2xl border bg-card shadow-card"
-            >
+            <div key={c.id} className="overflow-hidden rounded-2xl border bg-card shadow-card">
               <button
                 onClick={() => toggle(c.id)}
                 className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-accent/10"
@@ -187,7 +170,10 @@ function CollectionHistory() {
                 <div className="min-w-0 flex-1">
                   <p
                     className="font-semibold"
-                    style={{ color: "#3a2318", fontFamily: "'Hind Siliguri', sans-serif" }}
+                    style={{
+                      color: "#3a2318",
+                      fontFamily: "'Hind Siliguri', sans-serif",
+                    }}
                   >
                     {weekdayBn(c.collection_date)} · {englishDateBn(c.collection_date)}
                   </p>
@@ -195,10 +181,7 @@ function CollectionHistory() {
                     কালেকশনকারী: {c.collected_by_name ?? "—"} · {toBnDigits(c.items_count)} জন
                   </p>
                 </div>
-                <p
-                  className="text-lg font-bold tabular-nums"
-                  style={{ color: "#2d7a4f" }}
-                >
+                <p className="text-lg font-bold tabular-nums" style={{ color: "#2d7a4f" }}>
                   {taka(c.total_amount)}
                 </p>
               </button>
@@ -208,10 +191,13 @@ function CollectionHistory() {
                   <table className="w-full text-sm">
                     <thead
                       className="text-xs"
-                      style={{ backgroundColor: "#eadfcc", color: "#3a2318" }}
+                      style={{
+                        backgroundColor: "#eadfcc",
+                        color: "#3a2318",
+                      }}
                     >
                       <tr>
-                        <th className="px-3 py-2 text-left w-16">ক্রম</th>
+                        <th className="w-16 px-3 py-2 text-left">ক্রম</th>
                         <th className="px-3 py-2 text-left">সিরিয়াল</th>
                         <th className="px-3 py-2 text-left">দোকানের নাম</th>
                         <th className="px-3 py-2 text-right">টাকা</th>
@@ -220,28 +206,17 @@ function CollectionHistory() {
                     <tbody>
                       {cItems.map((it, i) => (
                         <tr key={it.id} className="border-t">
-                          <td
-                            className="px-3 py-2 tabular-nums"
-                            style={{ color: "#7a6558" }}
-                          >
+                          <td className="px-3 py-2 tabular-nums" style={{ color: "#7a6558" }}>
                             {toBnDigits(i + 1)}
                           </td>
-                          <td
-                            className="px-3 py-2 tabular-nums"
-                            style={{ color: "#3a2318" }}
-                          >
-                            {it.party_serial
-                              ? toBnDigits(it.party_serial)
-                              : "—"}
+                          <td className="px-3 py-2 tabular-nums" style={{ color: "#3a2318" }}>
+                            {it.party_serial ? toBnDigits(it.party_serial) : "—"}
                           </td>
-                          <td
-                            className="px-3 py-2"
-                            style={{ color: "#3a2318" }}
-                          >
+                          <td className="px-3 py-2" style={{ color: "#3a2318" }}>
                             {it.party_name}
                           </td>
                           <td
-                            className="px-3 py-2 text-right tabular-nums font-semibold"
+                            className="px-3 py-2 text-right font-semibold tabular-nums"
                             style={{ color: "#3a2318" }}
                           >
                             {taka(it.amount)}
@@ -251,10 +226,7 @@ function CollectionHistory() {
                     </tbody>
                   </table>
                   {c.notes && (
-                    <p
-                      className="border-t px-5 py-2 text-xs"
-                      style={{ color: "#7a6558" }}
-                    >
+                    <p className="border-t px-5 py-2 text-xs" style={{ color: "#7a6558" }}>
                       নোট: {c.notes}
                     </p>
                   )}
@@ -266,10 +238,7 @@ function CollectionHistory() {
 
         {collections.length === 0 && (
           <div className="rounded-2xl border-2 border-dashed bg-card py-16 text-center">
-            <History
-              className="mx-auto h-10 w-10"
-              style={{ color: "#c9924a" }}
-            />
+            <History className="mx-auto h-10 w-10" style={{ color: "#c9924a" }} />
             <p className="mt-2" style={{ color: "#7a6558" }}>
               এই সময়ে কোনো কালেকশন হয়নি
             </p>

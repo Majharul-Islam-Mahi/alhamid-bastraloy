@@ -1,5 +1,5 @@
 // src/routes/_authenticated/admin.halkhata.tsx
-// নোটিশ ব্যবস্থাপনা — হালখাতা, ছাড়, জরুরি, অনুষ্ঠান সহ সব ধরনের
+// নোটিশ ব্যবস্থাপনা — হালখাতা, ছাড়, জরুরি, অনুষ্ঠান সহ সব ধরনের + Back button
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toBnDigits, SHOP } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { toast } from "sonner";
@@ -104,9 +105,7 @@ function HalkhataPage() {
       setNotice({
         title: current.title,
         message: current.message,
-        expires_at: current.expires_at
-          ? String(current.expires_at).slice(0, 10)
-          : "",
+        expires_at: current.expires_at ? String(current.expires_at).slice(0, 10) : "",
         notice_type: current.notice_type ?? "general",
         priority: current.priority ?? 0,
       });
@@ -162,8 +161,7 @@ function HalkhataPage() {
   async function deactivate() {
     const ok = await confirmDialog({
       title: "নোটিশ বন্ধ করবেন?",
-      message:
-        "এই নোটিশটি সব কাস্টমার আর দেখতে পাবে না। আপনি পরে আবার চালু করতে পারবেন।",
+      message: "এই নোটিশটি সব কাস্টমার আর দেখতে পাবে না। আপনি পরে আবার চালু করতে পারবেন।",
       confirmText: "হ্যাঁ, বন্ধ করুন",
       cancelText: "না, থাকুক",
       variant: "danger",
@@ -198,11 +196,13 @@ function HalkhataPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-2">
-        <Bell className="h-7 w-7 text-primary" />
-        <h1 className="font-display text-3xl text-primary">
-          নোটিশ ব্যবস্থাপনা
-        </h1>
+      {/* Header with Back */}
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <div className="flex items-center gap-2">
+          <Bell className="h-6 w-6 text-primary md:h-7 md:w-7" />
+          <h1 className="font-display text-2xl text-primary md:text-3xl">নোটিশ ব্যবস্থাপনা</h1>
+        </div>
       </div>
 
       {current && (
@@ -215,12 +215,8 @@ function HalkhataPage() {
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold text-primary">
-                ✅ নোটিশ চালু আছে
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {current.title}
-              </p>
+              <p className="text-sm font-semibold text-primary">✅ নোটিশ চালু আছে</p>
+              <p className="mt-1 text-xs text-muted-foreground">{current.title}</p>
             </div>
             <Button variant="outline" size="sm" onClick={deactivate}>
               <Trash2 /> বন্ধ করুন
@@ -234,16 +230,11 @@ function HalkhataPage() {
           {current ? "নোটিশ সম্পাদনা" : "নতুন নোটিশ তৈরি"}
         </h2>
         <div className="space-y-3">
-          {/* Type selector */}
           <label className="block text-sm">
-            <span className="text-xs text-muted-foreground">
-              নোটিশের ধরন
-            </span>
+            <span className="text-xs text-muted-foreground">নোটিশের ধরন</span>
             <select
               value={notice.notice_type}
-              onChange={(e) =>
-                setNotice({ ...notice, notice_type: e.target.value })
-              }
+              onChange={(e) => setNotice({ ...notice, notice_type: e.target.value })}
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
             >
               {NOTICE_TYPES.map((t) => (
@@ -261,9 +252,7 @@ function HalkhataPage() {
             <span className="text-xs text-muted-foreground">শিরোনাম</span>
             <input
               value={notice.title}
-              onChange={(e) =>
-                setNotice({ ...notice, title: e.target.value })
-              }
+              onChange={(e) => setNotice({ ...notice, title: e.target.value })}
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
               placeholder={
                 selectedType?.value === "halkhata"
@@ -276,14 +265,10 @@ function HalkhataPage() {
           </label>
 
           <label className="block text-sm">
-            <span className="text-xs text-muted-foreground">
-              বার্তা (সবাই এই লেখা দেখবে)
-            </span>
+            <span className="text-xs text-muted-foreground">বার্তা (সবাই এই লেখা দেখবে)</span>
             <textarea
               value={notice.message}
-              onChange={(e) =>
-                setNotice({ ...notice, message: e.target.value })
-              }
+              onChange={(e) => setNotice({ ...notice, message: e.target.value })}
               rows={5}
               className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
               placeholder="বিস্তারিত লিখুন..."
@@ -292,22 +277,16 @@ function HalkhataPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">
-                মেয়াদ শেষ (ঐচ্ছিক)
-              </span>
+              <span className="text-xs text-muted-foreground">মেয়াদ শেষ (ঐচ্ছিক)</span>
               <input
                 type="date"
                 value={notice.expires_at}
-                onChange={(e) =>
-                  setNotice({ ...notice, expires_at: e.target.value })
-                }
+                onChange={(e) => setNotice({ ...notice, expires_at: e.target.value })}
                 className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">
-                প্রাধান্য (priority)
-              </span>
+              <span className="text-xs text-muted-foreground">প্রাধান্য (priority)</span>
               <select
                 value={notice.priority}
                 onChange={(e) =>
@@ -341,13 +320,13 @@ function HalkhataPage() {
           </div>
 
           <div className="mb-4 rounded-lg bg-[#2d7a4f]/10 p-3">
-            <p className="text-xs font-semibold text-[#2d7a4f]">
-              কীভাবে পাঠাবেন:
-            </p>
+            <p className="text-xs font-semibold text-[#2d7a4f]">কীভাবে পাঠাবেন:</p>
             <ol className="mt-1 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
               <li>প্রতিটা কাস্টমারের ডানে "পাঠান" ক্লিক করুন</li>
               <li>WhatsApp খুলবে — বার্তা আগেই লেখা থাকবে</li>
-              <li>শুধু <strong>Send</strong> ক্লিক করুন</li>
+              <li>
+                শুধু <strong>Send</strong> ক্লিক করুন
+              </li>
             </ol>
           </div>
 
@@ -370,20 +349,14 @@ function HalkhataPage() {
               <tbody>
                 {customers.map((c) => (
                   <tr key={c.id} className="border-t hover:bg-accent/10">
-                    <td className="px-3 py-2 tabular-nums">
-                      {toBnDigits(c.serial)}
-                    </td>
+                    <td className="px-3 py-2 tabular-nums">{toBnDigits(c.serial)}</td>
                     <td className="px-3 py-2 font-medium">
                       {c.shop_name}
                       {c.owner_name && (
-                        <span className="block text-xs text-muted-foreground">
-                          {c.owner_name}
-                        </span>
+                        <span className="block text-xs text-muted-foreground">{c.owner_name}</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 tabular-nums">
-                      {toBnDigits(c.mobile!)}
-                    </td>
+                    <td className="px-3 py-2 tabular-nums">{toBnDigits(c.mobile!)}</td>
                     <td className="px-3 py-2 text-right">
                       <button
                         onClick={() => openWhatsApp(c.mobile!, c.shop_name)}
@@ -396,10 +369,7 @@ function HalkhataPage() {
                 ))}
                 {customers.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="px-3 py-8 text-center text-muted-foreground"
-                    >
+                    <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
                       কোনো কাস্টমার নেই — /admin/users এ গিয়ে তৈরি করুন
                     </td>
                   </tr>

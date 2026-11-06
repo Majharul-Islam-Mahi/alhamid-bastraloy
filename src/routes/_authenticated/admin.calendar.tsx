@@ -1,5 +1,5 @@
 // src/routes/_authenticated/admin.calendar.tsx
-// Calendar — সব event এক জায়গায় (হালখাতা, চাদরাত, কালেকশন, বিশেষ দিন)
+// Calendar — সব event এক জায়গায় (হালখাতা, চাদরাত, কালেকশন, বিশেষ দিন) + Back
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toBnDigits, todayISO, englishDateBn } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { toast } from "sonner";
@@ -79,11 +80,7 @@ function CalendarPage() {
   });
 
   const monthFirst = ymd(viewYear, viewMonth, 1);
-  const monthLast = ymd(
-    viewYear,
-    viewMonth,
-    new Date(viewYear, viewMonth + 1, 0).getDate(),
-  );
+  const monthLast = ymd(viewYear, viewMonth, new Date(viewYear, viewMonth + 1, 0).getDate());
 
   const { data: events = [] } = useQuery({
     queryKey: ["events", viewYear, viewMonth],
@@ -95,7 +92,7 @@ function CalendarPage() {
           .gte("event_date", monthFirst)
           .lte("event_date", monthLast)
           .order("event_date")
-      ).data ?? [] as Event[],
+      ).data ?? ([] as Event[]),
   });
 
   const grid = useMemo(() => {
@@ -174,8 +171,7 @@ function CalendarPage() {
   async function deleteEvent(id: string) {
     const ok = await confirmDialog({
       title: "Event মুছবেন?",
-      message:
-        "এই event চিরতরে মুছে যাবে। পরে আবার যোগ করতে পারবেন।",
+      message: "এই event চিরতরে মুছে যাবে। পরে আবার যোগ করতে পারবেন।",
       confirmText: "হ্যাঁ, মুছুন",
       cancelText: "না",
       variant: "danger",
@@ -194,7 +190,9 @@ function CalendarPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-1 md:space-y-5 md:px-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Header with Back */}
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
         <div className="flex items-center gap-2">
           <CalendarIcon className="h-6 w-6 md:h-7 md:w-7" style={{ color: "#4a2f1e" }} />
           <h1
@@ -204,7 +202,7 @@ function CalendarPage() {
             ক্যালেন্ডার
           </h1>
         </div>
-        <div className="flex items-center gap-1.5 md:gap-2">
+        <div className="ml-auto flex items-center gap-1.5 md:gap-2">
           <Button variant="outline" size="sm" onClick={goToday}>
             আজ
           </Button>
@@ -267,9 +265,7 @@ function CalendarPage() {
                 className="min-h-[70px] border-b border-r p-1 text-left transition hover:bg-[#eadfcc]/40 md:min-h-[90px] md:p-2"
                 style={{
                   borderColor: "#eadfcc",
-                  backgroundColor: isSelected
-                    ? "rgba(201,146,74,0.15)"
-                    : "transparent",
+                  backgroundColor: isSelected ? "rgba(201,146,74,0.15)" : "transparent",
                   outline: isSelected ? "2px solid #c9924a" : "none",
                   outlineOffset: "-2px",
                 }}
@@ -344,9 +340,7 @@ function CalendarPage() {
             style={{
               backgroundColor: l.color,
               color:
-                l.value === "closed" ||
-                l.value === "chadrat" ||
-                l.value === "collection"
+                l.value === "closed" || l.value === "chadrat" || l.value === "collection"
                   ? "#ffffff"
                   : "#3a2318",
             }}
@@ -395,9 +389,7 @@ function CalendarPage() {
               </span>
               <input
                 value={form.title}
-                onChange={(e) =>
-                  setForm({ ...form, title: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="হালখাতা ২০২৬"
                 className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
               />
@@ -408,9 +400,7 @@ function CalendarPage() {
               </span>
               <select
                 value={form.event_type}
-                onChange={(e) =>
-                  setForm({ ...form, event_type: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, event_type: e.target.value })}
                 className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
               >
                 {EVENT_TYPES.map((t) => (
@@ -426,9 +416,7 @@ function CalendarPage() {
               </span>
               <textarea
                 value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={2}
                 className="mt-1 block w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
@@ -437,21 +425,13 @@ function CalendarPage() {
               <input
                 type="checkbox"
                 checked={form.is_holiday}
-                onChange={(e) =>
-                  setForm({ ...form, is_holiday: e.target.checked })
-                }
+                onChange={(e) => setForm({ ...form, is_holiday: e.target.checked })}
                 className="h-4 w-4"
               />
-              <span style={{ color: "#3a2318" }}>
-                এই দিন দোকান বন্ধ থাকবে
-              </span>
+              <span style={{ color: "#3a2318" }}>এই দিন দোকান বন্ধ থাকবে</span>
             </label>
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdd(false)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>
                 <X /> বাতিল
               </Button>
               <Button variant="coffee" size="sm" onClick={addEvent}>
@@ -496,17 +476,11 @@ function CalendarPage() {
                     {type?.label ?? e.event_type}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p
-                      className="truncate font-semibold"
-                      style={{ color: "#3a2318" }}
-                    >
+                    <p className="truncate font-semibold" style={{ color: "#3a2318" }}>
                       {e.title}
                     </p>
                     {e.description && (
-                      <p
-                        className="truncate text-xs"
-                        style={{ color: "#7a6558" }}
-                      >
+                      <p className="truncate text-xs" style={{ color: "#7a6558" }}>
                         {e.description}
                       </p>
                     )}

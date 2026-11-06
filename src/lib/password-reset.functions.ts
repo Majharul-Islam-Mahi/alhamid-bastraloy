@@ -4,15 +4,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sendOtp } from "@/lib/otp-service";
+import { checkRateLimit } from "@/lib/rate-limit.server";
 
 const digits = (s: string) =>
-  s
-    .replace(/[০-৯]/g, (d) => String("০১২৩৪৫৬৭৮৯".indexOf(d)))
-    .replace(/\D/g, "");
+  s.replace(/[০-৯]/g, (d) => String("০১২৩৪৫৬৭৮৯".indexOf(d))).replace(/\D/g, "");
 
 // ---- ধাপ ১: মোবাইল যাচাই, OTP তৈরি ও পাঠানো ----
 export const requestPasswordReset = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
+  .validator((d) =>
     z
       .object({
         mobile: z.string().trim().min(6).max(20),
@@ -22,6 +21,14 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const mobile = digits(data.mobile);
     if (mobile.length < 10) throw new Error("সঠিক মোবাইল নাম্বার দিন");
+
+    // Rate limit: প্রতি মোবাইলে ৩ বার / ১৫ মিনিট
+    const rl = await checkRateLimit(`pwreset:${mobile}`, 3, 15);
+    if (!rl.ok) {
+      throw new Error(
+        `অনেকবার চেষ্টা করা হয়েছে। ${Math.ceil(rl.retryAfter / 60)} মিনিট পর আবার চেষ্টা করুন।`,
+      );
+    }
 
     // প্রোফাইল থেকে user_id খুঁজি (মোবাইল দিয়ে)
     const { data: prof, error } = await supabaseAdmin
@@ -64,7 +71,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
 
 // ---- ধাপ ২: OTP যাচাই + নতুন পাসওয়ার্ড সেট ----
 export const resetPasswordWithOtp = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
+  .validator((d) =>
     z
       .object({
         mobile: z.string().trim().min(6).max(20),
@@ -90,12 +97,7 @@ export const resetPasswordWithOtp = createServerFn({ method: "POST" })
       .eq("id", data.challengeId)
       .single();
 
-    if (
-      !otp ||
-      otp.user_id !== prof.id ||
-      otp.used ||
-      new Date(otp.expires_at) < new Date()
-    ) {
+    if (!otp || otp.user_id !== prof.id || otp.used || new Date(otp.expires_at) < new Date()) {
       throw new Error("OTP মেয়াদোত্তীর্ণ বা অবৈধ");
     }
 
@@ -104,10 +106,7 @@ export const resetPasswordWithOtp = createServerFn({ method: "POST" })
     }
 
     // mark used
-    await supabaseAdmin
-      .from("otp_codes")
-      .update({ used: true })
-      .eq("id", otp.id);
+    await supabaseAdmin.from("otp_codes").update({ used: true }).eq("id", otp.id);
 
     // password update
     const { error } = await supabaseAdmin.auth.admin.updateUserById(prof.id, {

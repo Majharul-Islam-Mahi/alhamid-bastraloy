@@ -1,14 +1,16 @@
 // src/routes/_authenticated/admin.users.tsx
-// ইউজার ও কাস্টমার ব্যবস্থাপনা — Auto Serial + Password Reset Modal
+// ইউজার ও কাস্টমার ব্যবস্থাপনা — Auto Serial + Password Reset with 2FA
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { UserPlus, KeyRound, RefreshCw, X, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { createAccount, resetPassword } from "@/lib/auth.functions";
+import { createAccount, resetPasswordWithOtp } from "@/lib/auth.functions";
 import { toBnDigits, roleLabel } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
+import { DestructiveOtpDialog } from "@/components/admin/DestructiveOtpDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
@@ -28,9 +30,7 @@ type Row = {
 const SERIAL_MIN = 1;
 
 function suggestNextSerial(existing: string[]): string {
-  const nums = existing
-    .map((s) => parseInt(s.replace(/\D/g, ""), 10))
-    .filter((n) => !isNaN(n));
+  const nums = existing.map((s) => parseInt(s.replace(/\D/g, ""), 10)).filter((n) => !isNaN(n));
   const max = nums.length ? Math.max(...nums) : 0;
   const next = Math.max(max + 1, SERIAL_MIN);
   return String(next).padStart(3, "0");
@@ -39,12 +39,18 @@ function suggestNextSerial(existing: string[]): string {
 function Users() {
   const qc = useQueryClient();
   const createAcc = useServerFn(createAccount);
-  const resetPw = useServerFn(resetPassword);
+  const resetPwWithOtp = useServerFn(resetPasswordWithOtp);
 
   const [showAdd, setShowAdd] = useState(false);
   const [resetTarget, setResetTarget] = useState<Row | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [pendingReset, setPendingReset] = useState<{
+    userId: string;
+    password: string;
+  } | null>(null);
 
   const [f, setF] = useState({
     role: "customer" as "owner" | "moderator" | "customer",
@@ -58,16 +64,13 @@ function Users() {
     area_id: "",
   });
 
-  // সব data
   const { data: rows = [] } = useQuery({
     queryKey: ["users-list"],
     queryFn: async (): Promise<Row[]> => {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id,full_name,mobile,serial,last_login_at");
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id,role");
+      const { data: roles } = await supabase.from("user_roles").select("user_id,role");
       const map: Record<string, string[]> = {};
       for (const r of roles ?? []) {
         (map[r.user_id] ??= []).push(r.role);
@@ -91,9 +94,7 @@ function Users() {
     },
   });
 
-  const existingSerials = rows
-    .map((r) => r.serial)
-    .filter((s): s is string => !!s);
+  const existingSerials = rows.map((r) => r.serial).filter((s): s is string => !!s);
 
   useEffect(() => {
     if (showAdd && f.role === "customer" && !f.serial) {
@@ -156,7 +157,6 @@ function Users() {
     }
   }
 
-  // ---- Password Reset Modal ----
   function openReset(u: Row) {
     setResetTarget(u);
     setNewPassword("");
@@ -168,34 +168,48 @@ function Users() {
       toast.error("পাসওয়ার্ড কমপক্ষে ৬ অক্ষর");
       return;
     }
+    setPendingReset({
+      userId: resetTarget.id,
+      password: newPassword,
+    });
+    setOtpDialogOpen(true);
+  }
+
+  async function handleVerifiedReset(challengeId: string, code: string) {
+    if (!pendingReset || !resetTarget) return;
     setBusy(true);
     try {
-      await resetPw({
-        data: { userId: resetTarget.id, password: newPassword },
+      await resetPwWithOtp({
+        data: {
+          targetUserId: pendingReset.userId,
+          newPassword: pendingReset.password,
+          challengeId,
+          code,
+        },
       });
-      toast.success(
-        `${resetTarget.full_name}-এর পাসওয়ার্ড পরিবর্তন হয়েছে`,
-      );
+      toast.success(`${resetTarget.full_name}-এর পাসওয়ার্ড পরিবর্তন হয়েছে`);
       setResetTarget(null);
       setNewPassword("");
+      setPendingReset(null);
+      setOtpDialogOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
+      throw e;
     } finally {
       setBusy(false);
     }
   }
 
   const serialValid =
-    f.role !== "customer" ||
-    (f.serial.trim() && !existingSerials.includes(f.serial.trim()));
+    f.role !== "customer" || (f.serial.trim() && !existingSerials.includes(f.serial.trim()));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl text-primary">
-          ইউজার ও কাস্টমার
-        </h1>
-        <Button variant="coffee" onClick={() => setShowAdd(!showAdd)}>
+      {/* Header with Back */}
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <h1 className="font-display text-3xl text-primary">ইউজার ও কাস্টমার</h1>
+        <Button variant="coffee" className="ml-auto" onClick={() => setShowAdd(!showAdd)}>
           <UserPlus /> নতুন অ্যাকাউন্ট
         </Button>
       </div>
@@ -206,11 +220,7 @@ function Users() {
             <span className="text-xs text-muted-foreground">Role</span>
             <select
               value={f.role}
-              onChange={(e) =>
-                changeRole(
-                  e.target.value as "owner" | "moderator" | "customer",
-                )
-              }
+              onChange={(e) => changeRole(e.target.value as "owner" | "moderator" | "customer")}
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
             >
               <option value="customer">কাস্টমার</option>
@@ -241,9 +251,7 @@ function Users() {
           </label>
 
           <label className="text-sm">
-            <span className="text-xs text-muted-foreground">
-              পাসওয়ার্ড (৬+)
-            </span>
+            <span className="text-xs text-muted-foreground">পাসওয়ার্ড (৬+)</span>
             <input
               type="password"
               value={f.password}
@@ -256,15 +264,11 @@ function Users() {
           {f.role === "customer" && (
             <>
               <label className="text-sm sm:col-span-2">
-                <span className="text-xs text-muted-foreground">
-                  সিরিয়াল (Auto)
-                </span>
+                <span className="text-xs text-muted-foreground">সিরিয়াল (Auto)</span>
                 <div className="mt-1 flex gap-2">
                   <input
                     value={f.serial}
-                    onChange={(e) =>
-                      setF({ ...f, serial: e.target.value.trim() })
-                    }
+                    onChange={(e) => setF({ ...f, serial: e.target.value.trim() })}
                     className={`block h-10 flex-1 rounded-md border bg-background px-3 font-mono ${
                       serialValid ? "" : "border-destructive text-destructive"
                     }`}
@@ -279,21 +283,15 @@ function Users() {
                   </button>
                 </div>
                 {!serialValid && f.serial && (
-                  <p className="mt-1 text-xs text-destructive">
-                    ⚠️ "{f.serial}" আগেই ব্যবহৃত
-                  </p>
+                  <p className="mt-1 text-xs text-destructive">⚠️ "{f.serial}" আগেই ব্যবহৃত</p>
                 )}
                 {serialValid && f.serial && (
-                  <p className="mt-1 text-xs text-success">
-                    ✅ "{f.serial}" খালি
-                  </p>
+                  <p className="mt-1 text-xs text-success">✅ "{f.serial}" খালি</p>
                 )}
               </label>
 
               <label className="text-sm">
-                <span className="text-xs text-muted-foreground">
-                  দোকানের নাম
-                </span>
+                <span className="text-xs text-muted-foreground">দোকানের নাম</span>
                 <input
                   value={f.shop_name}
                   onChange={(e) => setF({ ...f, shop_name: e.target.value })}
@@ -317,9 +315,7 @@ function Users() {
                 />
               </label>
               <label className="text-sm">
-                <span className="text-xs text-muted-foreground">
-                  এলাকা (কালেকশনের জন্য)
-                </span>
+                <span className="text-xs text-muted-foreground">এলাকা (কালেকশনের জন্য)</span>
                 <select
                   value={f.area_id}
                   onChange={(e) => setF({ ...f, area_id: e.target.value })}
@@ -329,10 +325,7 @@ function Users() {
                   {areas.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name_bn || a.name} (
-                      {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][
-                        a.day_of_week
-                      ]}
-                      )
+                      {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
                     </option>
                   ))}
                 </select>
@@ -344,9 +337,7 @@ function Users() {
             <Button
               variant="coffee"
               onClick={submitNew}
-              disabled={
-                busy || !f.full_name.trim() || !f.mobile.trim() || !f.password
-              }
+              disabled={busy || !f.full_name.trim() || !f.mobile.trim() || !f.password}
             >
               তৈরি করুন
             </Button>
@@ -375,22 +366,16 @@ function Users() {
                     {u.serial ? toBnDigits(u.serial) : "—"}
                   </td>
                   <td className="px-4 py-2">{u.full_name}</td>
-                  <td className="px-4 py-2 tabular-nums">
-                    {toBnDigits(u.mobile)}
-                  </td>
-                  <td className="px-4 py-2">
-                    {u.roles.map((r) => roleLabel[r] ?? r).join(", ")}
-                  </td>
+                  <td className="px-4 py-2 tabular-nums">{toBnDigits(u.mobile)}</td>
+                  <td className="px-4 py-2">{u.roles.map((r) => roleLabel[r] ?? r).join(", ")}</td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">
-                    {u.last_login_at
-                      ? new Date(u.last_login_at).toLocaleString("bn-BD")
-                      : "—"}
+                    {u.last_login_at ? new Date(u.last_login_at).toLocaleString("bn-BD") : "—"}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       onClick={() => openReset(u)}
                       className="rounded p-2 text-primary hover:bg-accent"
-                      title="পাসওয়ার্ড রিসেট"
+                      title="পাসওয়ার্ড রিসেট (OTP সহ)"
                     >
                       <KeyRound className="h-4 w-4" />
                     </button>
@@ -399,10 +384,7 @@ function Users() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                     কোনো ইউজার নেই
                   </td>
                 </tr>
@@ -413,7 +395,7 @@ function Users() {
       </div>
 
       {/* Password Reset Modal */}
-      {resetTarget && (
+      {resetTarget && !otpDialogOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={() => !busy && setResetTarget(null)}
@@ -425,9 +407,7 @@ function Users() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <h2 className="font-display text-xl text-primary">
-                  পাসওয়ার্ড রিসেট
-                </h2>
+                <h2 className="font-display text-xl text-primary">পাসওয়ার্ড রিসেট</h2>
               </div>
               <button
                 onClick={() => !busy && setResetTarget(null)}
@@ -440,10 +420,16 @@ function Users() {
             <p className="mb-4 rounded-lg bg-accent/10 p-3 text-sm">
               <strong>{resetTarget.full_name}</strong>
               <span className="block text-xs text-muted-foreground">
-                সিরিয়াল: {resetTarget.serial || "—"} · মোবাইল:{" "}
-                {toBnDigits(resetTarget.mobile)}
+                সিরিয়াল: {resetTarget.serial || "—"} · মোবাইল: {toBnDigits(resetTarget.mobile)}
               </span>
             </p>
+
+            <div className="mb-4 rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-xs">
+              <p style={{ color: "#4a2f1e" }}>
+                <strong>🔐 2-step verification:</strong> পরের ধাপে আপনার মোবাইলে OTP পাঠানো হবে। OTP
+                দিলেই পাসওয়ার্ড পরিবর্তন হবে।
+              </p>
+            </div>
 
             <label className="block text-sm">
               <span className="text-xs text-muted-foreground">
@@ -463,24 +449,32 @@ function Users() {
             </label>
 
             <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setResetTarget(null)}
-                disabled={busy}
-              >
+              <Button variant="outline" onClick={() => setResetTarget(null)} disabled={busy}>
                 বাতিল
               </Button>
-              <Button
-                variant="coffee"
-                onClick={doReset}
-                disabled={busy || newPassword.length < 6}
-              >
-                <Save /> সংরক্ষণ
+              <Button variant="coffee" onClick={doReset} disabled={busy || newPassword.length < 6}>
+                <Save /> পরবর্তী ধাপ
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 2FA Dialog */}
+      <DestructiveOtpDialog
+        open={otpDialogOpen}
+        onClose={() => {
+          setOtpDialogOpen(false);
+          setPendingReset(null);
+        }}
+        onVerified={handleVerifiedReset}
+        title="পাসওয়ার্ড রিসেট নিশ্চিত করুন"
+        description={
+          resetTarget
+            ? `${resetTarget.full_name}-এর পাসওয়ার্ড পরিবর্তন করতে আপনার মোবাইলে পাঠানো OTP দিন।`
+            : ""
+        }
+      />
     </div>
   );
 }

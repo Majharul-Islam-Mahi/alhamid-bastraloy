@@ -5,9 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 async function signed(path: string | null | undefined): Promise<string | null> {
   if (!path) return null;
-  const { data } = await supabase.storage
-    .from("shop-images")
-    .createSignedUrl(path, 60 * 60 * 24);
+  const { data } = await supabase.storage.from("shop-images").createSignedUrl(path, 60 * 60 * 24);
   return data?.signedUrl ?? null;
 }
 
@@ -15,11 +13,7 @@ export function useShopSettings() {
   return useQuery({
     queryKey: ["shop-settings"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("shop_settings")
-        .select("*")
-        .eq("id", 1)
-        .maybeSingle();
+      const { data } = await supabase.from("shop_settings").select("*").eq("id", 1).maybeSingle();
 
       // gallery always array
       let galleryPaths: string[] = [];
@@ -36,11 +30,7 @@ export function useShopSettings() {
       }
 
       // sign all
-      const [
-        ownerPhoto,
-        shopPhoto,
-        galleryUrls,
-      ] = await Promise.all([
+      const [ownerPhoto, shopPhoto, galleryUrls] = await Promise.all([
         signed(data?.owner_photo_path),
         signed(data?.shop_photo_path),
         Promise.all(galleryPaths.map((p) => signed(p))),

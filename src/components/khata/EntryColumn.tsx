@@ -1,9 +1,9 @@
 // src/components/khata/EntryColumn.tsx
-// খুচরা খাতার একটি কলাম — নগদ বিক্রি / খরচ / জমা / বাকি
-// প্রতিটি লাইন আলাদা, ম্যানুয়ালি টাইপ, নিচে সর্বমোট auto
+// খুচরা খাতার একটি কলাম — line-by-line entry with running total
+// [FIXED] cash_sale/expense now show full list + auto total + delete per row
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, num, toBnDigits } from "@/lib/shop";
@@ -45,25 +45,11 @@ function matchParty(name: string, parties: PartyLite[]) {
   const n = name.trim().toLowerCase();
   if (!n) return null;
   return (
-    parties.find(
-      (p) =>
-        p.serial.toLowerCase() === n || p.shop_name.toLowerCase() === n,
-    )?.id ?? null
+    parties.find((p) => p.serial.toLowerCase() === n || p.shop_name.toLowerCase() === n)?.id ?? null
   );
 }
 
-// ------- একটি লাইন -------
-function Row({
-  e,
-  idx,
-  p,
-  onChanged,
-}: {
-  e: Entry;
-  idx: number;
-  p: Props;
-  onChanged: () => void;
-}) {
+function Row({ e, idx, p, onChanged }: { e: Entry; idx: number; p: Props; onChanged: () => void }) {
   const [name, setName] = useState(e.name ?? "");
   const [details, setDetails] = useState(e.details ?? "");
   const [amount, setAmount] = useState(String(e.amount ?? ""));
@@ -87,14 +73,11 @@ function Row({
       patch.details === (e.details ?? null) &&
       patch.amount === Number(e.amount)
     ) {
-      return; // কোনো পরিবর্তন নেই
+      return;
     }
 
     setSaving(true);
-    const { error } = await supabase
-      .from("day_entries")
-      .update(patch)
-      .eq("id", e.id);
+    const { error } = await supabase.from("day_entries").update(patch).eq("id", e.id);
     setSaving(false);
 
     if (error) {
@@ -106,10 +89,7 @@ function Row({
 
   async function del() {
     if (!confirm("এই লাইনটি মুছে ফেলবেন?")) return;
-    const { error } = await supabase
-      .from("day_entries")
-      .delete()
-      .eq("id", e.id);
+    const { error } = await supabase.from("day_entries").delete().eq("id", e.id);
     if (error) {
       toast.error("মুছা যায়নি: " + error.message);
       return;
@@ -119,7 +99,7 @@ function Row({
   }
 
   return (
-    <li className="grid grid-cols-[28px_1fr_auto_auto] items-center gap-1 border-b border-ledger-line py-0.5">
+    <li className="grid grid-cols-[26px_1fr_auto_auto] items-center gap-1 border-b border-ledger-line py-0.5">
       <span className="text-right text-xs text-muted-foreground tabular-nums">
         {toBnDigits(idx)}
       </span>
@@ -147,9 +127,7 @@ function Row({
           />
         )}
         {!p.withName && !p.withDetails && (
-          <span className="px-1.5 text-sm text-muted-foreground">
-            {details || "—"}
-          </span>
+          <span className="px-1.5 text-sm text-muted-foreground">{details || "নগদ বিক্রি"}</span>
         )}
       </div>
 
@@ -168,10 +146,7 @@ function Row({
 
       <div className="flex items-center gap-0.5">
         <input
-          className={
-            inputCls +
-            " w-24 shrink-0 text-right font-semibold tabular-nums"
-          }
+          className={inputCls + " w-24 shrink-0 text-right font-semibold tabular-nums"}
           inputMode="decimal"
           value={amount}
           disabled={!p.canEdit || !!e.memo_id}
@@ -193,12 +168,12 @@ function Row({
   );
 }
 
-// ------- মূল কলাম -------
 export function EntryColumn(p: Props) {
   const [newName, setNewName] = useState("");
   const [newDetails, setNewDetails] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [adding, setAdding] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const entriesTotal = p.entries.reduce((s, e) => s + Number(e.amount), 0);
   const grandTotal = entriesTotal + (p.opening ?? 0);
@@ -229,7 +204,6 @@ export function EntryColumn(p: Props) {
     p.onChanged();
   }
 
-  // শুধু deposit এর জন্য wholesale, expense এর জন্য supplier, বাকির জন্য সব
   const partyOptions = p.parties.filter((x) =>
     p.kind === "deposit"
       ? x.kind === "wholesale"
@@ -241,9 +215,17 @@ export function EntryColumn(p: Props) {
   return (
     <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card shadow-card">
       <header
-        className={`px-4 py-2 text-center font-display text-lg ${p.tone}`}
+        className={`flex items-center justify-between px-4 py-2 font-display text-lg ${p.tone}`}
       >
-        {p.title}
+        <span>{p.title}</span>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="no-print rounded p-0.5 opacity-70 hover:opacity-100"
+          title={collapsed ? "বিস্তারিত দেখুন" : "সংক্ষিপ্ত করুন"}
+        >
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
       </header>
 
       <datalist id={`parties-${p.kind}`}>
@@ -254,92 +236,87 @@ export function EntryColumn(p: Props) {
         ))}
       </datalist>
 
-      <ul className="ledger-paper max-h-96 flex-1 overflow-y-auto px-2 py-1">
-        {/* গতকালের ইজা — শুধু জমার ১ম লাইনে */}
-        {p.opening !== undefined && (
-          <li className="grid grid-cols-[28px_1fr_auto_auto] items-center gap-1 border-b border-ledger-line bg-accent/20 py-1.5">
-            <span className="text-right text-xs text-muted-foreground tabular-nums">
-              {toBnDigits(1)}
-            </span>
-            <span className="min-w-0 truncate px-1.5 text-sm font-semibold">
-              গতকালের ইজা
-            </span>
-            <span className="w-6" />
-            <span className="w-24 px-1.5 text-right text-sm font-bold tabular-nums text-accent-foreground">
-              {taka(p.opening)}
-            </span>
-          </li>
-        )}
+      {!collapsed && (
+        <>
+          <ul className="ledger-paper max-h-[480px] min-h-[120px] flex-1 overflow-y-auto px-2 py-1">
+            {p.opening !== undefined && (
+              <li className="grid grid-cols-[26px_1fr_auto_auto] items-center gap-1 border-b border-ledger-line bg-accent/20 py-1.5">
+                <span className="text-right text-xs text-muted-foreground tabular-nums">
+                  {toBnDigits(1)}
+                </span>
+                <span className="min-w-0 truncate px-1.5 text-sm font-semibold">গতকালের ইজা</span>
+                <span className="w-6" />
+                <span className="w-24 px-1.5 text-right text-sm font-bold tabular-nums text-accent-foreground">
+                  {taka(p.opening)}
+                </span>
+              </li>
+            )}
 
-        {/* এন্ট্রি লাইনগুলো */}
-        {p.entries.map((e, i) => (
-          <Row
-            key={e.id}
-            e={e}
-            idx={i + (p.opening !== undefined ? 2 : 1)}
-            p={p}
-            onChanged={p.onChanged}
-          />
-        ))}
+            {p.entries.map((e, i) => (
+              <Row
+                key={e.id}
+                e={e}
+                idx={i + (p.opening !== undefined ? 2 : 1)}
+                p={p}
+                onChanged={p.onChanged}
+              />
+            ))}
 
-        {p.entries.length === 0 && p.opening === undefined && (
-          <li className="py-6 text-center text-xs text-muted-foreground">
-            কোনো এন্ট্রি নেই
-          </li>
-        )}
-      </ul>
+            {p.entries.length === 0 && p.opening === undefined && (
+              <li className="py-6 text-center text-xs text-muted-foreground">
+                কোনো এন্ট্রি নেই — নিচে যোগ করুন
+              </li>
+            )}
+          </ul>
 
-      {/* ইনপুট ফর্ম */}
-      {p.canEdit && (
-        <form
-          onSubmit={add}
-          className="no-print space-y-1 border-t bg-muted/40 p-2"
-        >
-          {p.withName && (
-            <input
-              className={inputCls + " h-9 border-input bg-card"}
-              placeholder="নাম / সিরিয়াল"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              list={`parties-${p.kind}`}
-            />
+          {p.canEdit && (
+            <form onSubmit={add} className="no-print space-y-1 border-t bg-muted/40 p-2">
+              {p.withName && (
+                <input
+                  className={inputCls + " h-9 border-input bg-card"}
+                  placeholder="নাম / সিরিয়াল"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  list={`parties-${p.kind}`}
+                />
+              )}
+              {p.withDetails && (
+                <input
+                  className={inputCls + " h-9 border-input bg-card"}
+                  placeholder="মালের বিবরণ ও দাম"
+                  value={newDetails}
+                  onChange={(e) => setNewDetails(e.target.value)}
+                />
+              )}
+              <div className="flex gap-1">
+                <input
+                  className={inputCls + " h-9 border-input bg-card text-right tabular-nums"}
+                  inputMode="decimal"
+                  placeholder="টাকা"
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="flex h-9 shrink-0 items-center gap-1 rounded-md bg-primary px-3 text-sm text-primary-foreground disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" /> যোগ
+                </button>
+              </div>
+            </form>
           )}
-          {p.withDetails && (
-            <input
-              className={inputCls + " h-9 border-input bg-card"}
-              placeholder="মালের বিবরণ ও দাম"
-              value={newDetails}
-              onChange={(e) => setNewDetails(e.target.value)}
-            />
-          )}
-          <div className="flex gap-1">
-            <input
-              className={
-                inputCls +
-                " h-9 border-input bg-card text-right tabular-nums"
-              }
-              inputMode="decimal"
-              placeholder="টাকা"
-              value={newAmount}
-              onChange={(e) => setNewAmount(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={adding}
-              className="flex h-9 shrink-0 items-center gap-1 rounded-md bg-primary px-3 text-sm text-primary-foreground disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" /> যোগ
-            </button>
-          </div>
-        </form>
+        </>
       )}
 
-      {/* সর্বমোট */}
       <footer className="mt-auto flex items-center justify-between gap-2 bg-gradient-coffee px-4 py-2.5 text-primary-foreground">
-        <span className="text-sm">সর্বমোট</span>
-        <span className="text-lg font-bold tabular-nums">
-          {taka(grandTotal)}
+        <span className="text-sm">
+          সর্বমোট
+          {!collapsed && p.entries.length > 0 && (
+            <span className="ml-1 text-xs opacity-75">({toBnDigits(p.entries.length)} টি)</span>
+          )}
         </span>
+        <span className="text-lg font-bold tabular-nums">{taka(grandTotal)}</span>
       </footer>
     </section>
   );

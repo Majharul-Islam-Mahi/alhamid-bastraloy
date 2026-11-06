@@ -1,19 +1,27 @@
 // src/routes/_authenticated/admin.memo.new.tsx
-// নতুন মেমো — কাস্টমার সিরিয়াল দিলে অটো fill, পণ্য যোগ, confirm করলে stock কমে
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+// নতুন মেমো — 3 ধরনের + unit conversion
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { Plus, Trash2, ArrowLeft, CheckCircle2, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
-  taka,
-  toBnDigits,
-  num,
-  todayISO,
-  englishDateBn,
-  SHOP,
-} from "@/lib/shop";
+  Plus,
+  Trash2,
+  CheckCircle2,
+  X,
+  FileText,
+  Search,
+  User as UserIcon,
+  AlertTriangle,
+  PackagePlus,
+  Store,
+  Users,
+  UserPlus,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { taka, toBnDigits, num, todayISO, toEnDigits, SHOP } from "@/lib/shop";
 import { partyDue } from "@/lib/ledger";
+import { productUnits, toBaseQty, conversionHint, type UnitConversions } from "@/lib/units";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -22,8 +30,12 @@ export const Route = createFileRoute("/_authenticated/admin/memo/new")({
   component: NewMemo,
 });
 
+type MemoType = "wholesale" | "retail_serial" | "retail_manual";
+
 type Item = {
   key: string;
+  catId: string;
+  subId: string;
   name: string;
   quantity: string;
   unit: string;
@@ -37,11 +49,33 @@ type Product = {
   quantity: number;
   unit: string;
   unit_price: number;
+  category_id: string | null;
+  subcategory_id: string | null;
+  base_unit: string;
+  unit_conversions: UnitConversions | null;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  name_bn: string | null;
+  parent_id: string | null;
+};
+
+type Party = {
+  id: string;
+  serial: string;
+  shop_name: string;
+  owner_name: string | null;
+  mobile: string | null;
+  address: string | null;
 };
 
 function emptyItem(): Item {
   return {
     key: crypto.randomUUID(),
+    catId: "",
+    subId: "",
     name: "",
     quantity: "1",
     unit: "পিস",
@@ -54,8 +88,10 @@ function NewMemo() {
   const nav = useNavigate();
   const qc = useQueryClient();
 
-  // ---- Memo header ----
-  const [searchSerial, setSearchSerial] = useState("");
+  const [memoType, setMemoType] = useState<MemoType>("wholesale");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [shopName, setShopName] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -63,49 +99,118 @@ function NewMemo() {
   const [address, setAddress] = useState("");
   const [partySerial, setPartySerial] = useState("");
   const [previousDue, setPreviousDue] = useState(0);
+
   const [memoDate, setMemoDate] = useState(todayISO());
   const [paid, setPaid] = useState("");
   const [note, setNote] = useState("");
 
-  // ---- Items ----
   const [items, setItems] = useState<Item[]>([emptyItem()]);
+  const [busy, setBusy] = useState(false);
 
-  // ---- Products lookup ----
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+
+  // ---- Data ----
   const { data: products = [] } = useQuery({
     queryKey: ["products-all"],
     queryFn: async () =>
       ((
         await supabase
           .from("products")
-          .select("id,name,quantity,unit,unit_price")
+          .select(
+            "id,name,quantity,unit,unit_price,category_id,subcategory_id,base_unit,unit_conversions",
+          )
           .order("name")
       ).data ?? []) as Product[],
   });
 
-  // ---- Customer lookup ----
-  const { data: party } = useQuery({
-    queryKey: ["party-by-serial", searchSerial.trim()],
-    enabled: searchSerial.trim().length > 0,
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () =>
+      ((await supabase.from("categories").select("id,name,name_bn,parent_id").order("sort_order"))
+        .data ?? []) as Category[],
+  });
+
+  const parents = categories.filter((c) => !c.parent_id);
+  const childrenOf = (pid: string) => categories.filter((c) => c.parent_id === pid);
+
+  function catLabel(id: string): string {
+    if (!id) return "";
+    const c = categories.find((x) => x.id === id);
+    return c ? c.name_bn || c.name : "";
+  }
+
+  const partyKindFilter: "wholesale" | "retail" | null =
+    memoType === "wholesale" ? "wholesale" : memoType === "retail_serial" ? "retail" : null;
+
+  const { data: allParties = [] } = useQuery({
+    queryKey: ["parties-search", partyKindFilter],
+    enabled: partyKindFilter !== null,
     queryFn: async () => {
+      if (!partyKindFilter) return [];
       const { data } = await supabase
         .from("parties")
-        .select("id,serial,shop_name,owner_name,mobile,address")
-        .eq("serial", searchSerial.trim())
-        .maybeSingle();
-      return data;
+        .select("id,serial,shop_name,owner_name,mobile,address,kind")
+        .eq("kind", partyKindFilter)
+        .order("serial")
+        .limit(2000);
+      return (data ?? []) as Party[];
     },
   });
 
+  const suggestions = useMemo(() => {
+    if (!partyKindFilter) return [];
+    const q = toEnDigits(searchQuery.trim().toLowerCase());
+    if (!q) return [];
+    return allParties
+      .filter((p) => {
+        const shop = p.shop_name.toLowerCase();
+        const owner = (p.owner_name ?? "").toLowerCase();
+        const serial = p.serial.toLowerCase();
+        const mob = (p.mobile ?? "").replace(/\D/g, "");
+        const qDigits = q.replace(/\D/g, "");
+        return (
+          shop.includes(q) ||
+          owner.includes(q) ||
+          serial.includes(q) ||
+          (qDigits && mob.includes(qDigits))
+        );
+      })
+      .slice(0, 8);
+  }, [searchQuery, allParties, partyKindFilter]);
+
   useEffect(() => {
-    if (!party) return;
-    setPartyId(party.id);
-    setShopName(party.shop_name ?? "");
-    setOwnerName(party.owner_name ?? "");
-    setMobile(party.mobile ?? "");
-    setAddress(party.address ?? "");
-    setPartySerial(party.serial ?? "");
-    partyDue(party.id).then(setPreviousDue);
-  }, [party]);
+    function handler(e: MouseEvent) {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    setSearchQuery("");
+    setShowSuggestions(false);
+    setPartyId(null);
+    setShopName("");
+    setOwnerName("");
+    setMobile("");
+    setAddress("");
+    setPartySerial("");
+    setPreviousDue(0);
+  }, [memoType]);
+
+  function selectParty(p: Party) {
+    setPartyId(p.id);
+    setShopName(p.shop_name ?? "");
+    setOwnerName(p.owner_name ?? "");
+    setMobile(p.mobile ?? "");
+    setAddress(p.address ?? "");
+    setPartySerial(p.serial ?? "");
+    setSearchQuery(`${p.serial} — ${p.shop_name}`);
+    setShowSuggestions(false);
+    partyDue(p.id).then(setPreviousDue);
+  }
 
   function clearParty() {
     setPartyId(null);
@@ -115,39 +220,43 @@ function NewMemo() {
     setAddress("");
     setPartySerial("");
     setPreviousDue(0);
-    setSearchSerial("");
+    setSearchQuery("");
   }
 
-  // ---- Items helpers ----
   function addItem() {
     setItems((arr) => [...arr, emptyItem()]);
   }
   function removeItem(key: string) {
-    setItems((arr) =>
-      arr.length <= 1 ? arr : arr.filter((i) => i.key !== key),
-    );
+    setItems((arr) => (arr.length <= 1 ? arr : arr.filter((i) => i.key !== key)));
   }
   function updateItem(key: string, patch: Partial<Item>) {
-    setItems((arr) =>
-      arr.map((i) => (i.key === key ? { ...i, ...patch } : i)),
-    );
+    setItems((arr) => arr.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   }
 
-  // নাম লিখলে product lookup করে unit/price auto-fill
+  // ✅ Product name → auto-fill: cat, sub, unit, price
   function onItemNameChange(key: string, name: string) {
-    const match = products.find(
-      (p) => p.name.toLowerCase() === name.trim().toLowerCase(),
-    );
+    const match = products.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
     if (match) {
+      const units = productUnits(match.base_unit || match.unit, match.unit_conversions);
+      const baseUnit = match.base_unit || match.unit || "পিস";
+      const defaultUnit = units.includes(match.unit) ? match.unit : baseUnit;
       updateItem(key, {
         name,
         product_id: match.id,
-        unit: match.unit || "পিস",
+        unit: defaultUnit,
         price: match.unit_price ? String(match.unit_price) : "",
+        catId: match.category_id ?? "",
+        subId: match.subcategory_id ?? "",
       });
     } else {
       updateItem(key, { name, product_id: null });
     }
+  }
+
+  // Selected product for an item
+  function productForItem(it: Item): Product | undefined {
+    if (!it.product_id) return undefined;
+    return products.find((p) => p.id === it.product_id);
   }
 
   const total = items.reduce((s, i) => s + num(i.quantity) * num(i.price), 0);
@@ -156,9 +265,24 @@ function NewMemo() {
 
   // ---- Save ----
   async function saveMemo(confirmIt: boolean) {
-    if (!shopName.trim()) {
-      toast.error("দোকানের নাম দিন");
-      return;
+    // Validation
+    if (memoType === "wholesale" || memoType === "retail_serial") {
+      if (!partyId) {
+        toast.error(
+          memoType === "wholesale" ? "পাইকারি কাস্টমার select করুন" : "খুচরা কাস্টমার select করুন",
+        );
+        return;
+      }
+    }
+    if (memoType === "retail_manual") {
+      if (!shopName.trim()) {
+        toast.error("কাস্টমারের নাম লিখুন");
+        return;
+      }
+      if (!mobile.trim()) {
+        toast.error("মোবাইল নম্বর লিখুন");
+        return;
+      }
     }
     const validItems = items.filter((i) => i.name.trim());
     if (validItems.length === 0) {
@@ -166,102 +290,227 @@ function NewMemo() {
       return;
     }
 
-    // ১) memo তৈরি
-    const { data: memo, error: e1 } = await supabase
-      .from("memos")
-      .insert({
-        memo_date: memoDate,
-        party_id: partyId,
-        shop_name: shopName.trim(),
-        owner_name: ownerName.trim() || null,
-        mobile: mobile.trim() || null,
-        address: address.trim() || null,
-        party_serial: partySerial || null,
-        previous_due: previousDue,
-        total,
-        paid: paidNum,
-        status: "draft",
-        note: note.trim() || null,
-      })
-      .select("id")
-      .single();
-
-    if (e1 || !memo) {
-      toast.error("মেমো তৈরি হয়নি: " + e1?.message);
-      return;
-    }
-
-    // ২) memo_items insert (product_id সহ)
-    const { error: e2 } = await supabase.from("memo_items").insert(
-      validItems.map((i, idx) => ({
-        memo_id: memo.id,
-        position: idx,
-        name: i.name.trim(),
-        quantity: num(i.quantity),
-        unit: i.unit || "পিস",
-        price: num(i.price),
-        product_id: i.product_id,
-      })),
-    );
-    if (e2) {
-      toast.error("আইটেম সেভ হয়নি: " + e2.message);
-      return;
-    }
-
-    // ৩) confirm
-    if (confirmIt) {
-      const { data: memoNo, error: e3 } = await supabase.rpc("confirm_memo", {
-        _memo_id: memo.id,
+    setBusy(true);
+    try {
+      // STEP 1: Confirm — stock auto-add + conversion calculate
+      const preparedItems = validItems.map((it) => {
+        const prod = products.find((p) => p.id === it.product_id);
+        const baseQty = prod
+          ? toBaseQty(
+              num(it.quantity),
+              it.unit,
+              prod.base_unit || prod.unit || "পিস",
+              prod.unit_conversions,
+            )
+          : num(it.quantity);
+        return { ...it, baseQty };
       });
-      if (e3) {
-        toast.error("কনফার্ম হয়নি: " + e3.message);
-        return;
-      }
-      toast.success(`মেমো #${memoNo} কনফার্ম হয়েছে — স্টক কমেছে`);
-    } else {
-      toast.success("মেমো pending হিসেবে সেভ হয়েছে");
-    }
 
-    qc.invalidateQueries({ queryKey: ["day-entries"] });
-    qc.invalidateQueries({ queryKey: ["day-summary"] });
-    qc.invalidateQueries({ queryKey: ["party-memos"] });
-    qc.invalidateQueries({ queryKey: ["products"] });
-    qc.invalidateQueries({ queryKey: ["products-all"] });
-    nav({ to: "/admin/memo/$id", params: { id: memo.id } });
+      const newStockItems: string[] = [];
+      const insertItems: {
+        name: string;
+        quantity: number;
+        unit: string;
+        price: number;
+        product_id: string | null;
+        base_quantity: number;
+      }[] = [];
+
+      if (confirmIt) {
+        for (let i = 0; i < preparedItems.length; i++) {
+          const it = preparedItems[i];
+          if (!it.product_id) {
+            const baseUnit = it.unit || "পিস";
+            const { data: newProd, error } = await supabase
+              .from("products")
+              .insert({
+                name: it.name.trim(),
+                quantity: num(it.quantity),
+                unit: baseUnit,
+                base_unit: baseUnit,
+                unit_price: num(it.price),
+                category_id: it.catId || null,
+                subcategory_id: it.subId || null,
+              })
+              .select("id")
+              .single();
+
+            if (error) {
+              throw new Error(`"${it.name}" stock এ যোগ হয়নি: ${error.message}`);
+            }
+            insertItems.push({
+              name: it.name.trim(),
+              quantity: num(it.quantity),
+              unit: it.unit,
+              price: num(it.price),
+              product_id: newProd.id,
+              base_quantity: num(it.quantity),
+            });
+            newStockItems.push(it.name);
+          } else {
+            insertItems.push({
+              name: it.name.trim(),
+              quantity: num(it.quantity),
+              unit: it.unit,
+              price: num(it.price),
+              product_id: it.product_id,
+              base_quantity: it.baseQty,
+            });
+          }
+        }
+      } else {
+        // Pending — base_quantity store without product creation
+        for (const it of preparedItems) {
+          insertItems.push({
+            name: it.name.trim(),
+            quantity: num(it.quantity),
+            unit: it.unit,
+            price: num(it.price),
+            product_id: it.product_id,
+            base_quantity: it.baseQty,
+          });
+        }
+      }
+
+      // STEP 2: Memo create
+      const { data: memo, error: e1 } = await supabase
+        .from("memos")
+        .insert({
+          memo_date: memoDate,
+          memo_type: memoType,
+          party_id: partyId,
+          shop_name: shopName.trim(),
+          owner_name: ownerName.trim() || null,
+          mobile: mobile.trim() || null,
+          address: address.trim() || null,
+          party_serial: partySerial || null,
+          previous_due: previousDue,
+          total,
+          paid: paidNum,
+          status: "draft",
+          note: note.trim() || null,
+        })
+        .select("id")
+        .single();
+
+      if (e1 || !memo) throw new Error(e1?.message ?? "মেমো তৈরি হয়নি");
+
+      // STEP 3: Memo items
+      const { error: e2 } = await supabase.from("memo_items").insert(
+        insertItems.map((i, idx) => ({
+          memo_id: memo.id,
+          position: idx,
+          name: i.name,
+          quantity: i.quantity,
+          unit: i.unit,
+          price: i.price,
+          product_id: i.product_id,
+          base_quantity: i.base_quantity,
+        })),
+      );
+      if (e2) throw new Error("আইটেম সেভ হয়নি: " + e2.message);
+
+      // STEP 4: Confirm
+      if (confirmIt) {
+        const { data: memoNo, error: e3 } = await supabase.rpc("confirm_memo", {
+          _memo_id: memo.id,
+        });
+        if (e3) throw new Error("কনফার্ম হয়নি: " + e3.message);
+
+        const memoNoDisplay = `M${String(memoNo).padStart(3, "0")}`;
+
+        if (newStockItems.length > 0) {
+          toast.success(
+            `${memoNoDisplay} কনফার্ম — ${newStockItems.length} টি নতুন পণ্য stock এ যোগ + deduct হয়েছে`,
+          );
+        } else {
+          toast.success(`${memoNoDisplay} কনফার্ম হয়েছে — স্টক কমেছে`);
+        }
+      } else {
+        toast.success("মেমো pending হিসেবে সেভ হয়েছে");
+      }
+
+      qc.invalidateQueries({ queryKey: ["memos-list"] });
+      qc.invalidateQueries({ queryKey: ["memos-pending-count"] });
+      qc.invalidateQueries({ queryKey: ["day-entries"] });
+      qc.invalidateQueries({ queryKey: ["day-summary"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["products-all"] });
+
+      if (confirmIt) {
+        nav({ to: "/admin/memo/$id", params: { id: memo.id } });
+      } else {
+        nav({ to: "/admin/memo" });
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
-      <div className="no-print flex items-center justify-between gap-3">
-        <Link
-          to="/admin/memo"
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" /> মেমো বই
-        </Link>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => saveMemo(false)}>
-            Pending রাখুন
+    <div className="mx-auto max-w-4xl space-y-4 md:space-y-5">
+      {/* Toolbar */}
+      <div className="no-print flex flex-wrap items-center gap-2 md:gap-3">
+        <BackButton fallback="/admin/memo" />
+        <h1 className="font-display text-xl text-primary md:text-2xl">নতুন মেমো</h1>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => saveMemo(false)} disabled={busy}>
+            <FileText className="h-4 w-4" /> Pending
           </Button>
-          <Button variant="coffee" onClick={() => saveMemo(true)}>
-            <CheckCircle2 /> কনফার্ম
+          <Button variant="coffee" size="sm" onClick={() => saveMemo(true)} disabled={busy}>
+            <CheckCircle2 className="h-4 w-4" /> কনফার্ম
           </Button>
         </div>
       </div>
 
-      {/* হেডার কার্ড */}
-      <div className="rounded-2xl border bg-card p-6 shadow-card print-area">
+      {/* Type Selector */}
+      <div className="no-print rounded-2xl border-2 border-primary/20 bg-card p-2 shadow-card">
+        <div className="grid grid-cols-3 gap-1">
+          <TypeBtn
+            active={memoType === "wholesale"}
+            onClick={() => setMemoType("wholesale")}
+            icon={<Store className="h-4 w-4" />}
+            label="পাইকারি"
+            sub="C001"
+          />
+          <TypeBtn
+            active={memoType === "retail_serial"}
+            onClick={() => setMemoType("retail_serial")}
+            icon={<Users className="h-4 w-4" />}
+            label="খুচরা সিরিয়াল"
+            sub="R001"
+          />
+          <TypeBtn
+            active={memoType === "retail_manual"}
+            onClick={() => setMemoType("retail_manual")}
+            icon={<UserPlus className="h-4 w-4" />}
+            label="খুচরা নতুন"
+            sub="manual"
+          />
+        </div>
+      </div>
+
+      {/* Header card */}
+      <div className="print-area rounded-2xl border bg-card p-5 shadow-card md:p-6">
         <div className="text-center">
-          <p className="font-display text-accent-foreground/70">
+          <p
+            className="text-sm md:text-base"
+            style={{ fontFamily: "'Tiro Bangla', serif", color: "#8a6a45" }}
+          >
             {SHOP.bismillah}
           </p>
-          <h1 className="mt-1 font-display text-3xl text-primary">
+          <h1
+            className="mt-1 text-2xl text-primary md:text-3xl"
+            style={{ fontFamily: "'Tiro Bangla', serif" }}
+          >
             {SHOP.name}
           </h1>
-          <p className="text-sm text-muted-foreground">{SHOP.address}</p>
+          <p className="text-xs text-muted-foreground md:text-sm">{SHOP.address}</p>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             তারিখ
             <input
@@ -271,172 +520,341 @@ function NewMemo() {
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
             />
           </label>
-          <label className="text-sm">
-            কাস্টমার সিরিয়াল (দিলে অটো fill হবে)
-            <div className="mt-1 flex gap-1">
-              <input
-                value={searchSerial}
-                onChange={(e) => setSearchSerial(e.target.value)}
-                placeholder="যেমন: 001 / Customer001"
-                className="h-10 flex-1 rounded-md border bg-background px-3"
-              />
-              {partyId && (
-                <button
-                  onClick={clearParty}
-                  className="rounded bg-muted px-2 text-muted-foreground"
-                  title="মুছুন"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+
+          {(memoType === "wholesale" || memoType === "retail_serial") && (
+            <div className="relative sm:col-span-2" ref={searchWrapRef}>
+              <label className="text-sm">
+                {memoType === "wholesale"
+                  ? "পাইকারি কাস্টমার (C001 / নাম / মোবাইল)"
+                  : "খুচরা কাস্টমার (R001 / নাম / মোবাইল)"}
+                <div className="relative mt-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder={
+                      memoType === "wholesale"
+                        ? "C001 / করিম স্টোর / 01716782247"
+                        : "R001 / বাবুল / 01700000003"
+                    }
+                    className="h-10 w-full rounded-md border bg-background pl-9 pr-9"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={clearParty}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"
+                      title="মুছুন"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </label>
+
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border-2 border-primary/20 bg-card shadow-lg">
+                  {suggestions.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => selectParty(p)}
+                      className="flex w-full items-center gap-3 border-b p-3 text-left transition last:border-0 hover:bg-accent/10"
+                      style={{ borderColor: "#eadfcc" }}
+                    >
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                        style={{
+                          backgroundColor: "rgba(201,146,74,0.2)",
+                          color: "#4a2f1e",
+                        }}
+                      >
+                        <UserIcon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-primary">{p.shop_name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {toBnDigits(p.serial)}
+                          {p.owner_name && ` · ${p.owner_name}`}
+                          {p.mobile && ` · ${toBnDigits(p.mobile)}`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          </label>
-          <label className="text-sm">
-            দোকানের নাম *
-            <input
-              value={shopName}
-              onChange={(e) => setShopName(e.target.value)}
-              className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
-            />
-          </label>
-          <label className="text-sm">
-            মালিকের নাম
-            <input
-              value={ownerName}
-              onChange={(e) => setOwnerName(e.target.value)}
-              className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
-            />
-          </label>
-          <label className="text-sm">
-            মোবাইল
-            <input
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
-              inputMode="tel"
-            />
-          </label>
-          <label className="text-sm">
-            ঠিকানা
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
-            />
-          </label>
+          )}
+
+          {(memoType === "wholesale" || memoType === "retail_serial") && partyId && (
+            <>
+              <label className="text-sm">
+                দোকানের নাম
+                <input
+                  value={shopName}
+                  readOnly
+                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
+                />
+              </label>
+              <label className="text-sm">
+                মালিকের নাম
+                <input
+                  value={ownerName}
+                  readOnly
+                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
+                />
+              </label>
+              <label className="text-sm">
+                মোবাইল
+                <input
+                  value={mobile}
+                  readOnly
+                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3 tabular-nums"
+                />
+              </label>
+              <label className="text-sm">
+                ঠিকানা
+                <input
+                  value={address}
+                  readOnly
+                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
+                />
+              </label>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                🎯 সিরিয়াল: <strong className="text-primary">{toBnDigits(partySerial)}</strong>
+              </p>
+            </>
+          )}
+
+          {memoType === "retail_manual" && (
+            <>
+              <div className="sm:col-span-2 rounded-xl border-l-4 border-accent bg-accent/5 p-3 text-xs">
+                <p style={{ color: "#3a2318" }}>
+                  <strong>খুচরা নতুন কাস্টমার</strong> — serial নেই। শুধু নাম + mobile লিখুন।
+                </p>
+              </div>
+              <label className="text-sm">
+                কাস্টমারের নাম *
+                <input
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                  placeholder="যেমন: বাবুল / করিম মিয়া"
+                  className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
+                />
+              </label>
+              <label className="text-sm">
+                মোবাইল নম্বর *
+                <input
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="01XXXXXXXXX"
+                  inputMode="tel"
+                  className="mt-1 block h-10 w-full rounded-md border bg-background px-3 tabular-nums"
+                />
+              </label>
+            </>
+          )}
         </div>
 
         {previousDue !== 0 && (
           <p className="mt-3 rounded-lg bg-accent/15 p-3 text-sm">
-            পূর্বের বাকি: <strong>{taka(previousDue)}</strong>
+            📊 পূর্বের বাকি: <strong>{taka(previousDue)}</strong>
           </p>
         )}
       </div>
 
-      {/* পণ্য টেবিল */}
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-card print-area">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary text-secondary-foreground">
-            <tr>
-              <th className="px-2 py-2 text-left">পণ্যের নাম</th>
-              <th className="px-2 py-2 text-right w-20">পরিমাণ</th>
-              <th className="px-2 py-2 text-left w-24">একক</th>
-              <th className="px-2 py-2 text-right w-28">দাম</th>
-              <th className="px-2 py-2 text-right w-32">মোট</th>
-              <th className="px-2 py-2 w-10 no-print"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it) => (
-              <tr key={it.key} className="border-t">
-                <td className="px-2 py-1">
-                  <input
-                    value={it.name}
-                    onChange={(e) =>
-                      onItemNameChange(it.key, e.target.value)
-                    }
-                    list="products-datalist"
-                    className="h-9 w-full rounded border-transparent bg-transparent px-2 outline-none focus:border-ring focus:bg-card"
-                    placeholder="পণ্য (স্টক থেকে অটো)"
-                  />
-                </td>
-                <td className="px-2 py-1">
+      {/* Items */}
+      <div className="print-area space-y-3 rounded-2xl border bg-card p-3 shadow-card md:p-4">
+        {items.map((it, idx) => {
+          const prod = productForItem(it);
+          const baseUnit = prod?.base_unit || prod?.unit || "পিস";
+          const conversions = prod?.unit_conversions ?? null;
+          const availableUnits = prod
+            ? productUnits(baseUnit, conversions)
+            : ["পিস", "থান", "গজ", "জোড়া", "ডজন", "১/২ ডজন", "সেট", "মিটার"];
+
+          const lineTotal = num(it.quantity) * num(it.price);
+          const datalistId = `products-dl-${it.key}`;
+
+          const nameTyped = it.name.trim().length > 0;
+          const notInStock = nameTyped && !it.product_id;
+
+          const hint = conversionHint(num(it.quantity), it.unit, baseUnit, conversions);
+
+          return (
+            <div key={it.key} className="rounded-xl border-2 border-border bg-background p-3">
+              {/* Row 1: # + Category + Sub + Delete */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  style={{
+                    backgroundColor: "rgba(201,146,74,0.2)",
+                    color: "#4a2f1e",
+                  }}
+                >
+                  {toBnDigits(idx + 1)}
+                </span>
+
+                <select
+                  value={it.catId}
+                  onChange={(e) =>
+                    updateItem(it.key, {
+                      catId: e.target.value,
+                      subId: "",
+                    })
+                  }
+                  className="h-9 min-w-30 flex-1 rounded-md border bg-card px-2 text-xs sm:text-sm"
+                >
+                  <option value="">সব ক্যাটাগরি</option>
+                  {parents.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name_bn || c.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={it.subId}
+                  onChange={(e) => updateItem(it.key, { subId: e.target.value })}
+                  disabled={!it.catId || childrenOf(it.catId).length === 0}
+                  className="h-9 min-w-30 flex-1 rounded-md border bg-card px-2 text-xs disabled:opacity-50 sm:text-sm"
+                >
+                  <option value="">
+                    {!it.catId
+                      ? "সাব-ক্যাটাগরি"
+                      : childrenOf(it.catId).length === 0
+                        ? "সাব নেই"
+                        : "সব সাব"}
+                  </option>
+                  {it.catId &&
+                    childrenOf(it.catId).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name_bn || c.name}
+                      </option>
+                    ))}
+                </select>
+
+                <button
+                  onClick={() => removeItem(it.key)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title="মুছুন"
+                  disabled={items.length <= 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Row 2: Product name */}
+              <div className="mt-2">
+                <input
+                  value={it.name}
+                  onChange={(e) => onItemNameChange(it.key, e.target.value)}
+                  list={datalistId}
+                  className={`h-10 w-full rounded-md border bg-card px-3 text-sm outline-none focus:border-primary ${
+                    notInStock ? "border-yellow-500 bg-yellow-50/40" : ""
+                  }`}
+                  placeholder="পণ্যের নাম লিখুন (স্টক থেকে suggestion আসবে)…"
+                />
+                <datalist id={datalistId}>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.name}>
+                      স্টক: {toBnDigits(p.quantity)} {p.base_unit || p.unit} — {taka(p.unit_price)}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+
+              {it.product_id && (
+                <p className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-success">
+                  ✓ Stock এ আছে — স্টক: {toBnDigits(prod?.quantity ?? 0)} {baseUnit}
+                  {it.catId && catLabel(it.catId) && ` · ${catLabel(it.catId)}`}
+                  {it.subId && catLabel(it.subId) && ` → ${catLabel(it.subId)}`}
+                </p>
+              )}
+
+              {notInStock && (
+                <div className="mt-1 flex items-start gap-1.5 rounded-md border-l-2 border-yellow-500 bg-yellow-50/60 px-2 py-1 text-[10px] text-yellow-800">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    <strong>Stock এ নেই</strong> — Confirm করলে{" "}
+                    <PackagePlus className="inline h-3 w-3" /> auto stock এ যোগ হবে
+                  </span>
+                </div>
+              )}
+
+              {/* Row 3: Unit / Qty / Price / Total */}
+              <div className="mt-2 grid grid-cols-[1fr_1fr_1.2fr_auto] gap-2">
+                <label className="text-[10px] text-muted-foreground">
+                  একক
+                  <select
+                    value={it.unit}
+                    onChange={(e) => updateItem(it.key, { unit: e.target.value })}
+                    className="mt-0.5 block h-9 w-full rounded-md border bg-card px-2 text-sm outline-none focus:border-primary"
+                  >
+                    {availableUnits.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-[10px] text-muted-foreground">
+                  পরিমাণ
                   <input
                     value={it.quantity}
-                    onChange={(e) =>
-                      updateItem(it.key, { quantity: e.target.value })
-                    }
-                    className="h-9 w-full rounded border-transparent bg-transparent px-2 text-right tabular-nums outline-none focus:border-ring focus:bg-card"
+                    onChange={(e) => updateItem(it.key, { quantity: e.target.value })}
+                    className="mt-0.5 block h-9 w-full rounded-md border bg-card px-2 text-right text-sm tabular-nums outline-none focus:border-primary"
                     inputMode="decimal"
                   />
-                </td>
-                <td className="px-2 py-1">
-                  <input
-                    value={it.unit}
-                    onChange={(e) =>
-                      updateItem(it.key, { unit: e.target.value })
-                    }
-                    className="h-9 w-full rounded border-transparent bg-transparent px-2 outline-none focus:border-ring focus:bg-card"
-                  />
-                </td>
-                <td className="px-2 py-1">
+                </label>
+                <label className="text-[10px] text-muted-foreground">
+                  দাম (প্রতি {it.unit})
                   <input
                     value={it.price}
-                    onChange={(e) =>
-                      updateItem(it.key, { price: e.target.value })
-                    }
-                    className="h-9 w-full rounded border-transparent bg-transparent px-2 text-right tabular-nums outline-none focus:border-ring focus:bg-card"
+                    onChange={(e) => updateItem(it.key, { price: e.target.value })}
+                    className="mt-0.5 block h-9 w-full rounded-md border bg-card px-2 text-right text-sm tabular-nums outline-none focus:border-primary"
                     inputMode="decimal"
                   />
-                </td>
-                <td className="px-2 py-1 text-right tabular-nums">
-                  {taka(num(it.quantity) * num(it.price))}
-                </td>
-                <td className="px-2 py-1 no-print">
-                  <button
-                    onClick={() => removeItem(it.key)}
-                    className="rounded p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-secondary/60">
-            <tr>
-              <td
-                colSpan={4}
-                className="px-4 py-3 text-right font-display text-lg"
-              >
-                সর্বমোট
-              </td>
-              <td className="px-2 py-3 text-right font-display text-xl font-bold tabular-nums text-primary">
-                {taka(total)}
-              </td>
-              <td className="no-print"></td>
-            </tr>
-          </tfoot>
-        </table>
+                </label>
+                <div className="self-end text-right">
+                  <p className="text-[10px] text-muted-foreground">মোট</p>
+                  <p className="mt-0.5 flex h-9 items-center justify-end whitespace-nowrap rounded-md bg-accent/10 px-3 text-sm font-bold tabular-nums text-primary">
+                    {taka(lineTotal)}
+                  </p>
+                </div>
+              </div>
 
-        {/* products auto-complete */}
-        <datalist id="products-datalist">
-          {products.map((p) => (
-            <option key={p.id} value={p.name}>
-              {toBnDigits(p.quantity)} {p.unit} — {taka(p.unit_price)}
-            </option>
-          ))}
-        </datalist>
+              {/* Conversion hint */}
+              {hint && (
+                <p className="mt-1 rounded-md bg-accent/10 px-2 py-1 text-[10px] text-primary">
+                  💡 {hint} — stock থেকে{" "}
+                  {toBnDigits(toBaseQty(num(it.quantity), it.unit, baseUnit, conversions))}{" "}
+                  {baseUnit} কাটবে
+                </p>
+              )}
+            </div>
+          );
+        })}
 
-        <div className="no-print p-2">
+        {/* Total footer */}
+        <div className="flex items-center justify-between rounded-xl bg-gradient-coffee px-4 py-3 text-primary-foreground">
+          <span className="text-sm font-semibold">সর্বমোট</span>
+          <span className="font-display text-xl font-bold tabular-nums">{taka(total)}</span>
+        </div>
+
+        <div className="no-print">
           <Button variant="outline" onClick={addItem} className="w-full">
-            <Plus /> পণ্য যোগ করুন
+            <Plus className="h-4 w-4" /> নতুন পণ্য যোগ করুন
           </Button>
         </div>
       </div>
 
       {/* জমা + নোট */}
-      <div className="rounded-2xl border bg-card p-5 shadow-card">
+      <div className="rounded-2xl border bg-card p-4 shadow-card md:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             জমা (এখন কত টাকা দিল)
@@ -462,19 +880,49 @@ function NewMemo() {
             মোট: <strong>{taka(total)}</strong>
           </p>
           <p>
-            জমা: <strong>{taka(paidNum)}</strong>
+            জমা: <strong className="text-success">{taka(paidNum)}</strong>
           </p>
           <p>
             বাকি: <strong className="text-destructive">{taka(due)}</strong>
           </p>
         </div>
-        <div className="mt-4 rounded-lg border border-dashed border-muted p-3 text-sm">
-          <p className="text-muted-foreground">বিক্রেতার স্বাক্ষর ও সিল</p>
-          <p className="mt-2 font-display text-lg text-primary">
-            {SHOP.name}
-          </p>
-        </div>
       </div>
     </div>
+  );
+}
+
+function TypeBtn({
+  active,
+  onClick,
+  icon,
+  label,
+  sub,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+        active
+          ? "bg-primary text-primary-foreground shadow"
+          : "bg-background text-foreground hover:bg-accent/10"
+      }`}
+    >
+      <span className="flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
+      <span
+        className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+      >
+        {sub}
+      </span>
+    </button>
   );
 }

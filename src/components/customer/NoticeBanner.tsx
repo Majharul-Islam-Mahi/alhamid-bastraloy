@@ -2,15 +2,7 @@
 // কাস্টমারদের জন্য নোটিশ banner — type-অনুযায়ী রঙ
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import {
-  Bell,
-  X,
-  AlertTriangle,
-  Percent,
-  Calendar,
-  Wrench,
-  Sparkles,
-} from "lucide-react";
+import { Bell, X, AlertTriangle, Percent, Calendar, Wrench, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const TYPE_CONFIG: Record<
@@ -131,10 +123,7 @@ export function NoticeBanner() {
           >
             {cfg.label}: {notice.title}
           </p>
-          <p
-            className="mt-1 whitespace-pre-wrap text-sm"
-            style={{ color: cfg.color }}
-          >
+          <p className="mt-1 whitespace-pre-wrap text-sm" style={{ color: cfg.color }}>
             {notice.message}
           </p>
         </div>

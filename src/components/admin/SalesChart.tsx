@@ -55,10 +55,7 @@ export function SalesChart() {
     },
   });
 
-  const maxVal = Math.max(
-    ...(data ?? []).map((d) => Math.max(d.sales, d.expenses)),
-    1,
-  );
+  const maxVal = Math.max(...(data ?? []).map((d) => Math.max(d.sales, d.expenses)), 1);
   const totalSales = (data ?? []).reduce((s, d) => s + d.sales, 0);
   const totalExpenses = (data ?? []).reduce((s, d) => s + d.expenses, 0);
   const totalProfit = totalSales - totalExpenses;
@@ -67,9 +64,7 @@ export function SalesChart() {
   return (
     <div className="rounded-2xl border bg-card p-5 shadow-card">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg text-primary">
-          শেষ ৭ দিনের হিসাব
-        </h3>
+        <h3 className="font-display text-lg text-primary">শেষ ৭ দিনের হিসাব</h3>
         <div className="flex gap-3 text-xs">
           <span className="flex items-center gap-1">
             <span className="h-3 w-3 rounded-sm bg-success" /> বিক্রি
@@ -87,10 +82,7 @@ export function SalesChart() {
           const expH = (d.expenses / maxVal) * 160;
           const isToday = d.date === today;
           return (
-            <div
-              key={d.date}
-              className="flex flex-1 flex-col items-center gap-1"
-            >
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
               <div className="flex h-40 w-full items-end justify-center gap-1">
                 <div
                   className="w-1/2 rounded-t bg-success transition-all"
@@ -121,21 +113,15 @@ export function SalesChart() {
       <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-4">
         <div>
           <p className="text-xs text-muted-foreground">৭ দিনে বিক্রি</p>
-          <p className="text-lg font-bold tabular-nums text-success">
-            {taka(totalSales)}
-          </p>
+          <p className="text-lg font-bold tabular-nums text-success">{taka(totalSales)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">৭ দিনে খরচ</p>
-          <p className="text-lg font-bold tabular-nums text-destructive">
-            {taka(totalExpenses)}
-          </p>
+          <p className="text-lg font-bold tabular-nums text-destructive">{taka(totalExpenses)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">৭ দিনে লাভ</p>
-          <p className="text-lg font-bold tabular-nums text-primary">
-            {taka(totalProfit)}
-          </p>
+          <p className="text-lg font-bold tabular-nums text-primary">{taka(totalProfit)}</p>
         </div>
       </div>
     </div>

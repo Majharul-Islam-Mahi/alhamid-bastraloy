@@ -1,11 +1,14 @@
 // src/routes/_authenticated/admin.dena.tsx
 // দেনা খাতা — সাপ্লায়ারদের তালিকা
+// [UPDATED] S001 format, Bengali digit search
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Search, UserPlus, Truck } from "lucide-react";
+import { Search, UserPlus, Truck, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { taka, toBnDigits, normalizeMobile } from "@/lib/shop";
+import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
+import { fetchNextSerial } from "@/lib/serial";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -26,6 +29,7 @@ function Dena() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     shop_name: "",
     owner_name: "",
@@ -49,27 +53,24 @@ function Dena() {
     queryKey: ["supplier-dues", parties.map((p) => p.id).join(",")],
     enabled: parties.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("supplier_entries")
-        .select("party_id,kind,amount");
+      const { data } = await supabase.from("supplier_entries").select("party_id,kind,amount");
       const out: Record<string, number> = {};
       for (const e of data ?? []) {
         out[e.party_id] =
-          (out[e.party_id] ?? 0) +
-          (e.kind === "purchase" ? Number(e.amount) : -Number(e.amount));
+          (out[e.party_id] ?? 0) + (e.kind === "purchase" ? Number(e.amount) : -Number(e.amount));
       }
       return out;
     },
   });
 
   const filtered = parties.filter((p) => {
-    const s = q.trim();
+    const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
     return (
-      p.shop_name.includes(s) ||
-      p.serial.includes(s) ||
+      p.shop_name.toLowerCase().includes(s) ||
+      p.serial.toLowerCase().includes(s) ||
       (p.mobile ?? "").includes(normalizeMobile(s)) ||
-      (p.owner_name ?? "").includes(s)
+      (p.owner_name ?? "").toLowerCase().includes(s)
     );
   });
 
@@ -78,50 +79,59 @@ function Dena() {
       toast.error("দোকানের নাম দিন");
       return;
     }
-    const nums = parties
-      .map((p) => parseInt(p.serial, 10))
-      .filter((n) => !isNaN(n));
-    const next = String((nums.length ? Math.max(...nums) : 0) + 1).padStart(
-      3,
-      "0",
-    );
-    const { error } = await supabase.from("parties").insert({
-      serial: next,
-      kind: "supplier",
-      shop_name: form.shop_name.trim(),
-      owner_name: form.owner_name.trim() || null,
-      mobile: normalizeMobile(form.mobile) || null,
-      address: form.address.trim() || null,
-    });
-    if (error) {
-      toast.error("সংরক্ষণ হয়নি: " + error.message);
-      return;
+    setBusy(true);
+    try {
+      // ✅ RPC call — S001 format
+      const next = await fetchNextSerial("supplier");
+
+      const { error } = await supabase.from("parties").insert({
+        serial: next,
+        kind: "supplier",
+        shop_name: form.shop_name.trim(),
+        owner_name: form.owner_name.trim() || null,
+        mobile: normalizeMobile(form.mobile) || null,
+        address: form.address.trim() || null,
+      });
+      if (error) throw error;
+
+      toast.success(`নতুন সাপ্লায়ার যোগ হয়েছে — সিরিয়াল ${next}`);
+      setShowAdd(false);
+      setForm({
+        shop_name: "",
+        owner_name: "",
+        mobile: "",
+        address: "",
+      });
+      qc.invalidateQueries({ queryKey: ["parties", "supplier"] });
+    } catch (e) {
+      toast.error("সংরক্ষণ হয়নি: " + (e as Error).message);
+    } finally {
+      setBusy(false);
     }
-    toast.success("নতুন সাপ্লায়ার যোগ হয়েছে");
-    setShowAdd(false);
-    setForm({ shop_name: "", owner_name: "", mobile: "", address: "" });
-    qc.invalidateQueries({ queryKey: ["parties", "supplier"] });
   }
 
   const totalDue = filtered.reduce((s, p) => s + (dues[p.id] ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-1 md:space-y-6 md:px-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
         <h1
           className="text-2xl md:text-3xl"
           style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
         >
           দেনা খাতা
         </h1>
-        <Button variant="coffee" onClick={() => setShowAdd(!showAdd)}>
-          <UserPlus /> নতুন সাপ্লায়ার
+        <Button variant="coffee" className="ml-auto" onClick={() => setShowAdd(!showAdd)}>
+          {showAdd ? <X /> : <UserPlus />}
+          {showAdd ? "বাতিল" : "নতুন সাপ্লায়ার"}
         </Button>
       </div>
 
       {showAdd && (
-        <div className="grid gap-3 rounded-2xl border bg-card p-5 shadow-card sm:grid-cols-2">
+        <div className="grid gap-3 rounded-2xl border-2 border-primary/30 bg-card p-5 shadow-card sm:grid-cols-2">
           <input
+            autoFocus
             placeholder="দোকান/কোম্পানির নাম *"
             value={form.shop_name}
             onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
@@ -144,10 +154,16 @@ function Dena() {
             value={form.address}
             onChange={(e) => setForm({ ...form, address: e.target.value })}
             className="h-10 rounded-md border bg-background px-3"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addParty();
+            }}
           />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            সিরিয়াল: S001, S002, ... (Auto-generate)
+          </p>
           <div className="sm:col-span-2">
-            <Button variant="coffee" onClick={addParty}>
-              সংরক্ষণ করুন
+            <Button variant="coffee" onClick={addParty} disabled={busy}>
+              {busy ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
             </Button>
           </div>
         </div>
@@ -165,7 +181,7 @@ function Dena() {
 
       <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
         <div className="table-scroll">
-          <table className="w-full min-w-[600px] text-sm">
+          <table className="w-full min-w-150 text-sm">
             <thead className="bg-secondary text-secondary-foreground">
               <tr>
                 <th className="px-4 py-3 text-left">সিরিয়াল</th>
@@ -177,9 +193,7 @@ function Dena() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t transition hover:bg-accent/10">
-                  <td className="px-4 py-3 tabular-nums">
-                    {toBnDigits(p.serial)}
-                  </td>
+                  <td className="px-4 py-3 tabular-nums">{toBnDigits(p.serial)}</td>
                   <td className="px-4 py-3">
                     <Link
                       to="/admin/dena/$id"
@@ -189,9 +203,7 @@ function Dena() {
                       {p.shop_name}
                     </Link>
                     {p.owner_name && (
-                      <span className="block text-xs text-muted-foreground">
-                        {p.owner_name}
-                      </span>
+                      <span className="block text-xs text-muted-foreground">{p.owner_name}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 tabular-nums">
@@ -208,10 +220,7 @@ function Dena() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                     কেউ পাওয়া যায়নি
                   </td>
                 </tr>

@@ -17,8 +17,7 @@ export const toBnDigits = (s: string | number) =>
   String(s).replace(/[0-9]/g, (d) => bnDigits[Number(d)]);
 
 // বাংলা সংখ্যা → ইংরেজি সংখ্যা (ইনপুটের জন্য)
-export const toEnDigits = (s: string) =>
-  s.replace(/[০-৯]/g, (d) => String(bnDigits.indexOf(d)));
+export const toEnDigits = (s: string) => s.replace(/[০-৯]/g, (d) => String(bnDigits.indexOf(d)));
 
 // টাকা ফরম্যাট: ২৫,০০০/-
 export const taka = (n: number | null | undefined) =>
@@ -38,8 +37,34 @@ export const todayISO = () => {
 };
 
 const weekdays = ["রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার", "শনিবার"];
-const bnMonths = ["বৈশাখ", "জ্যৈষ্ঠ", "আষাঢ়", "শ্রাবণ", "ভাদ্র", "আশ্বিন", "কার্তিক", "অগ্রহায়ণ", "পৌষ", "মাঘ", "ফাল্গুন", "চৈত্র"];
-const enMonthsBn = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
+const bnMonths = [
+  "বৈশাখ",
+  "জ্যৈষ্ঠ",
+  "আষাঢ়",
+  "শ্রাবণ",
+  "ভাদ্র",
+  "আশ্বিন",
+  "কার্তিক",
+  "অগ্রহায়ণ",
+  "পৌষ",
+  "মাঘ",
+  "ফাল্গুন",
+  "চৈত্র",
+];
+const enMonthsBn = [
+  "জানুয়ারি",
+  "ফেব্রুয়ারি",
+  "মার্চ",
+  "এপ্রিল",
+  "মে",
+  "জুন",
+  "জুলাই",
+  "আগস্ট",
+  "সেপ্টেম্বর",
+  "অক্টোবর",
+  "নভেম্বর",
+  "ডিসেম্বর",
+];
 
 export const weekdayBn = (iso: string) => weekdays[new Date(iso + "T00:00:00").getDay()];
 
@@ -49,7 +74,11 @@ export const englishDateBn = (iso: string) => {
 };
 
 export const englishDate = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
 // বাংলাদেশের সংশোধিত বঙ্গাব্দ ক্যালেন্ডার (১৪ এপ্রিল = ১ বৈশাখ)
 export const banglaDate = (iso: string) => {

@@ -1,11 +1,12 @@
 // src/components/khata/HawlatPanel.tsx
 // হাওলাত হিসাব — নাম/সিরিয়াল সার্চ, আগের বাকি carry forward
+// [FIXED] numeric column overflow, Bengali digit search, mobile responsive
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserPlus, Plus, Minus, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { taka, num, toBnDigits } from "@/lib/shop";
+import { taka, num, toBnDigits, toEnDigits } from "@/lib/shop";
 
 type H = {
   id: string;
@@ -66,11 +67,8 @@ export function HawlatPanel({
     if (!data) return [];
     return data.parties.map((p) => {
       const es = data.entries.filter((e) => e.party_id === p.id);
-      const sign = (e: H) =>
-        (e.kind === "give" ? 1 : -1) * Number(e.amount);
-      const prev = es
-        .filter((e) => e.entry_date < date)
-        .reduce((s, e) => s + sign(e), 0);
+      const sign = (e: H) => (e.kind === "give" ? 1 : -1) * Number(e.amount);
+      const prev = es.filter((e) => e.entry_date < date).reduce((s, e) => s + sign(e), 0);
       const give = es
         .filter((e) => e.entry_date === date && e.kind === "give")
         .reduce((s, e) => s + Number(e.amount), 0);
@@ -81,14 +79,17 @@ export function HawlatPanel({
     });
   }, [data, date]);
 
-  const s = applied.trim().toLowerCase();
-  const visible = rows.filter((r) =>
-    s
-      ? r.shop_name.toLowerCase().includes(s) ||
-        r.serial.toLowerCase().includes(s) ||
-        (r.mobile ?? "").includes(s)
-      : r.bal !== 0 || r.give || r.recv,
-  );
+  // ---- Search: normalize Bengali digits, lowercase, both sides ----
+  const s = toEnDigits(applied.trim().toLowerCase());
+  const visible = rows.filter((r) => {
+    if (!s) return r.bal !== 0 || r.give || r.recv;
+    const shop = r.shop_name.toLowerCase();
+    const serial = r.serial.toLowerCase();
+    const mobile = (r.mobile ?? "").replace(/\D/g, "");
+    return (
+      shop.includes(s) || serial.includes(s) || mobile.includes(s) || toBnDigits(shop).includes(s)
+    );
+  });
   const total = rows.reduce((t, r) => t + r.bal, 0);
 
   async function addParty(e: React.FormEvent) {
@@ -147,7 +148,7 @@ export function HawlatPanel({
       <header className="flex flex-wrap items-center justify-between gap-2 bg-secondary px-3 py-2">
         <h2 className="font-display text-lg text-primary">হাওলাত হিসাব</h2>
         <form
-          className="no-print flex gap-1"
+          className="no-print flex flex-wrap gap-1"
           onSubmit={(e) => {
             e.preventDefault();
             setApplied(q);
@@ -161,13 +162,13 @@ export function HawlatPanel({
                 setQ(e.target.value);
                 if (!e.target.value) setApplied("");
               }}
-              placeholder="নাম / সিরিয়াল"
-              className="h-8 w-36 rounded-md border bg-card pl-7 pr-2 text-sm"
+              placeholder="নাম / সিরিয়াল / মোবাইল"
+              className="h-8 w-40 rounded-md border bg-card pl-7 pr-2 text-sm"
             />
           </div>
           <button
             type="submit"
-            className="flex h-8 items-center rounded-md bg-primary px-2.5 text-xs text-primary-foreground"
+            className="flex h-8 items-center rounded-md bg-primary px-2.5 text-xs text-primary-foreground hover:brightness-110"
           >
             খুঁজুন
           </button>
@@ -206,9 +207,7 @@ export function HawlatPanel({
             required
             placeholder="নাম / দোকানের নাম"
             value={newP.shop_name}
-            onChange={(e) =>
-              setNewP({ ...newP, shop_name: e.target.value })
-            }
+            onChange={(e) => setNewP({ ...newP, shop_name: e.target.value })}
             className="h-8 flex-1 rounded-md border bg-card px-2 text-sm"
           />
           <input
@@ -224,14 +223,14 @@ export function HawlatPanel({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[540px] table-fixed text-sm">
+        <table className="w-full min-w-[600px] table-fixed text-sm">
           <colgroup>
             <col className="w-10" />
             <col />
             <col className="w-24" />
             <col className="w-20" />
             <col className="w-20" />
-            <col className="w-24" />
+            <col className="w-28" />
           </colgroup>
           <thead className="bg-muted/60 text-[11px] text-muted-foreground">
             <tr>
@@ -245,36 +244,26 @@ export function HawlatPanel({
           </thead>
           <tbody className="ledger-paper">
             {visible.map((r, i) => (
-              <tr
-                key={r.id}
-                className="border-b border-ledger-line align-middle"
-              >
+              <tr key={r.id} className="border-b border-ledger-line align-middle">
                 <td className="px-1.5 py-1.5 text-right text-muted-foreground tabular-nums">
                   {toBnDigits(i + 1)}
                 </td>
                 <td className="px-1.5 py-1.5">
                   <div className="flex items-center gap-1">
-                    <span
-                      className="min-w-0 flex-1 truncate font-medium"
-                      title={r.shop_name}
-                    >
+                    <span className="min-w-0 flex-1 truncate font-medium" title={r.shop_name}>
                       {r.shop_name}
                     </span>
                     {canEdit && (
                       <span className="no-print flex shrink-0 gap-0.5">
                         <button
-                          onClick={() =>
-                            setEntry({ party: r.id, kind: "give" })
-                          }
+                          onClick={() => setEntry({ party: r.id, kind: "give" })}
                           className="rounded bg-destructive/10 p-0.5 text-destructive"
                           title="হাওলাত দিলাম"
                         >
                           <Plus className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={() =>
-                            setEntry({ party: r.id, kind: "receive" })
-                          }
+                          onClick={() => setEntry({ party: r.id, kind: "receive" })}
                           className="rounded bg-success/10 p-0.5 text-success"
                           title="ফেরত পেলাম"
                         >
@@ -284,55 +273,41 @@ export function HawlatPanel({
                     )}
                   </div>
                   {entry?.party === r.id && (
-                    <form
-                      onSubmit={addEntry}
-                      className="mt-1 flex gap-1"
-                    >
+                    <form onSubmit={addEntry} className="mt-1 flex gap-1">
                       <input
                         autoFocus
                         inputMode="decimal"
                         value={amt}
                         onChange={(e) => setAmt(e.target.value)}
-                        placeholder={
-                          entry.kind === "give"
-                            ? "কত দিলাম"
-                            : "কত পেলাম"
-                        }
+                        placeholder={entry.kind === "give" ? "কত দিলাম" : "কত পেলাম"}
                         className="h-7 min-w-0 flex-1 rounded border bg-card px-2 text-right text-xs"
                       />
                       <button className="h-7 rounded bg-primary px-2 text-[11px] text-primary-foreground">
                         সেভ
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setEntry(null)}
-                        className="h-7 px-1"
-                      >
+                      <button type="button" onClick={() => setEntry(null)} className="h-7 px-1">
                         <X className="h-3 w-3" />
                       </button>
                     </form>
                   )}
                 </td>
-                <td className="truncate px-1.5 py-1.5 text-right tabular-nums">
+                <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-xs tabular-nums sm:text-sm">
                   {taka(r.prev)}
                 </td>
-                <td className="truncate px-1.5 py-1.5 text-right tabular-nums text-destructive">
+                <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-xs tabular-nums text-destructive sm:text-sm">
                   {r.give ? taka(r.give) : "—"}
                 </td>
-                <td className="truncate px-1.5 py-1.5 text-right tabular-nums text-success">
+                <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-xs tabular-nums text-success sm:text-sm">
                   {r.recv ? taka(r.recv) : "—"}
                 </td>
-                <td className="truncate px-1.5 py-1.5 text-right font-bold tabular-nums">
+                <td className="whitespace-nowrap px-1.5 py-1.5 text-right text-xs font-bold tabular-nums sm:text-sm">
                   {taka(r.bal)}
                 </td>
               </tr>
             ))}
             {visible.length === 0 && (
               <tr>
-                <td
-                  colSpan={6}
-                  className="py-6 text-center text-xs text-muted-foreground"
-                >
+                <td colSpan={6} className="py-6 text-center text-xs text-muted-foreground">
                   {s ? "কাউকে পাওয়া যায়নি" : "কোনো হাওলাত বাকি নেই"}
                 </td>
               </tr>

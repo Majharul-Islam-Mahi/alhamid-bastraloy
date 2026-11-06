@@ -1,134 +1,310 @@
 // src/routes/_authenticated/admin.memo.index.tsx
-// মেমো বই — সব মেমো সার্চ ও তালিকা
+// মেমো বই — বাম পাশে পাইকারি history, ডান পাশে খুচরা history
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Search, BookOpen } from "lucide-react";
+import { Plus, Search, BookOpen, FileText, Store, Users, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { taka, toBnDigits, englishDateBn, normalizeMobile } from "@/lib/shop";
+import { taka, toBnDigits, englishDateBn } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/admin/memo/")({
   head: () => ({ meta: [{ title: "মেমো বই — আল হামিদ বস্ত্রালয়" }] }),
-  component: MemoList,
+  component: MemoListSplit,
 });
 
-function MemoList() {
-  const [q, setQ] = useState("");
+type MemoRow = {
+  id: string;
+  memo_no: number | null;
+  memo_date: string;
+  memo_type: string | null;
+  shop_name: string | null;
+  owner_name: string | null;
+  mobile: string | null;
+  party_serial: string | null;
+  total: number;
+  paid: number;
+  status: string;
+  created_at: string;
+};
 
-  const { data: memos = [] } = useQuery({
-    queryKey: ["memos-list", q],
-    queryFn: async () => {
-      const s = q.trim();
-      let query = supabase
-        .from("memos")
-        .select("id,memo_no,memo_date,shop_name,owner_name,mobile,party_serial,total,paid,status")
-        .order("memo_date", { ascending: false })
-        .limit(500);
+function MemoListSplit() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mobileTab, setMobileTab] = useState<"wholesale" | "retail">("wholesale");
 
-      if (s) {
-        const isNum = /^\d+$/.test(s);
-        if (isNum) {
-          query = query.eq("memo_no", Number(s));
-        } else {
-          query = query.or(
-            `shop_name.ilike.%${s}%,mobile.ilike.%${normalizeMobile(s)}%,party_serial.ilike.%${s}%`,
-          );
-        }
-      }
-      return (await query).data ?? [];
-    },
+  // All confirmed/draft memos
+  const { data: allMemos = [] } = useQuery({
+    queryKey: ["memos-split-view"],
+    queryFn: async () =>
+      ((
+        await supabase
+          .from("memos")
+          .select(
+            "id,memo_no,memo_date,memo_type,shop_name,owner_name,mobile,party_serial,total,paid,status,created_at",
+          )
+          .order("created_at", { ascending: false })
+          .limit(500)
+      ).data ?? []) as MemoRow[],
   });
 
+  // Filter by search
+  const filtered = allMemos.filter((m) => {
+    const s = searchQuery.trim().toLowerCase();
+    if (!s) return true;
+    return (
+      (m.shop_name ?? "").toLowerCase().includes(s) ||
+      (m.owner_name ?? "").toLowerCase().includes(s) ||
+      (m.mobile ?? "").includes(s) ||
+      (m.party_serial ?? "").toLowerCase().includes(s) ||
+      String(m.memo_no ?? "").includes(s)
+    );
+  });
+
+  // Split into wholesale vs retail
+  const wholesaleMemos = filtered.filter(
+    (m) => m.memo_type === "wholesale" || m.memo_type === null,
+  );
+  const retailMemos = filtered.filter(
+    (m) => m.memo_type === "retail_serial" || m.memo_type === "retail_manual",
+  );
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl text-primary">মেমো বই</h1>
-        <Link to="/admin/memo/new">
-          <Button variant="coffee">
-            <Plus /> নতুন মেমো
+    <div className="mx-auto max-w-7xl space-y-4 md:space-y-5">
+      {/* Header */}
+      <div className="no-print flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <h1 className="font-display text-2xl text-primary md:text-3xl">মেমো বই</h1>
+      </div>
+
+      {/* New Memo buttons */}
+      <div className="no-print flex flex-wrap gap-2">
+        <Link to="/admin/memo/new" className="flex-1 sm:flex-initial">
+          <Button variant="coffee" className="w-full">
+            <Plus className="h-4 w-4" /> নতুন মেমো
           </Button>
         </Link>
       </div>
 
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="মেমো নম্বর / দোকানের নাম / সিরিয়াল / মোবাইল দিয়ে খুঁজুন…"
-          className="h-11 w-full rounded-xl border bg-card pl-10 pr-4 shadow-card"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="মেমো নম্বর / দোকানের নাম / সিরিয়াল / মোবাইল…"
+          className="h-11 w-full rounded-xl border bg-card pl-10 pr-10 shadow-card"
         />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"
+            title="ক্লিয়ার"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary text-secondary-foreground">
-            <tr>
-              <th className="px-3 py-3 text-left">মেমো নং</th>
-              <th className="px-3 py-3 text-left">তারিখ</th>
-              <th className="px-3 py-3 text-left">দোকান</th>
-              <th className="px-3 py-3 text-left">মোবাইল</th>
-              <th className="px-3 py-3 text-right">মোট</th>
-              <th className="px-3 py-3 text-right">জমা</th>
-              <th className="px-3 py-3 text-right">বাকি</th>
-              <th className="px-3 py-3 text-right">—</th>
-            </tr>
-          </thead>
-          <tbody>
-            {memos.map((m) => (
-              <tr key={m.id} className="border-t hover:bg-accent/10">
-                <td className="px-3 py-2 tabular-nums">
-                  {m.memo_no ? toBnDigits(String(m.memo_no).padStart(3, "0")) : "pending"}
-                </td>
-                <td className="px-3 py-2 tabular-nums">
-                  {englishDateBn(m.memo_date)}
-                </td>
-                <td className="px-3 py-2">
-                  <span className="font-semibold">{m.shop_name}</span>
-                  {m.status !== "confirmed" && (
-                    <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800">
-                      {m.status}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2 tabular-nums">
-                  {m.mobile ? toBnDigits(m.mobile) : "—"}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  {taka(m.total)}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-success">
-                  {taka(m.paid)}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-destructive">
-                  {taka(Number(m.total) - Number(m.paid))}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Link
-                    to="/admin/memo/$id"
-                    params={{ id: m.id }}
-                    className="text-primary underline"
-                  >
-                    দেখুন
-                  </Link>
-                </td>
-              </tr>
+      {/* Mobile Tabs — only visible on small screens */}
+      <div className="md:hidden">
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+          <button
+            onClick={() => setMobileTab("wholesale")}
+            className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              mobileTab === "wholesale"
+                ? "bg-primary text-primary-foreground shadow"
+                : "text-foreground"
+            }`}
+          >
+            <Store className="h-4 w-4" />
+            পাইকারি ({toBnDigits(wholesaleMemos.length)})
+          </button>
+          <button
+            onClick={() => setMobileTab("retail")}
+            className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              mobileTab === "retail"
+                ? "bg-primary text-primary-foreground shadow"
+                : "text-foreground"
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            খুচরা ({toBnDigits(retailMemos.length)})
+          </button>
+        </div>
+      </div>
+
+      {/* ============ Split View — 2 columns on desktop, tabs on mobile ============ */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* ========== LEFT: পাইকারি ========== */}
+        <div className={`${mobileTab === "wholesale" ? "block" : "hidden md:block"}`}>
+          <MemoColumn
+            title="পাইকারি মেমো"
+            icon={<Store className="h-5 w-5" />}
+            memos={wholesaleMemos}
+            tone="coffee"
+          />
+        </div>
+
+        {/* ========== RIGHT: খুচরা ========== */}
+        <div className={`${mobileTab === "retail" ? "block" : "hidden md:block"}`}>
+          <MemoColumn
+            title="খুচরা মেমো"
+            icon={<Users className="h-5 w-5" />}
+            memos={retailMemos}
+            tone="accent"
+          />
+        </div>
+      </div>
+
+      {/* Summary */}
+      <p className="text-center text-xs" style={{ color: "#7a6558" }}>
+        মোট {toBnDigits(filtered.length)} মেমো · পাইকারি {toBnDigits(wholesaleMemos.length)} · খুচরা{" "}
+        {toBnDigits(retailMemos.length)}
+      </p>
+    </div>
+  );
+}
+
+// ============================================================
+// Reusable column
+// ============================================================
+function MemoColumn({
+  title,
+  icon,
+  memos,
+  tone,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  memos: MemoRow[];
+  tone: "coffee" | "accent";
+}) {
+  const pendingMemos = memos.filter((m) => m.status === "draft");
+  const doneMemos = memos.filter((m) => m.status !== "draft");
+
+  const headerBg =
+    tone === "coffee"
+      ? "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)"
+      : "linear-gradient(135deg, #c9924a 0%, #b57f38 100%)";
+
+  const headerText = tone === "coffee" ? "#f8f3ea" : "#2e1c12";
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border bg-card shadow-card"
+      style={{ borderColor: "#dbcbb2" }}
+    >
+      {/* Column header */}
+      <div
+        className="flex items-center gap-2 px-4 py-3"
+        style={{ background: headerBg, color: headerText }}
+      >
+        <span style={{ color: headerText }}>{icon}</span>
+        <h2 className="flex-1 text-lg font-semibold" style={{ fontFamily: "'Tiro Bangla', serif" }}>
+          {title}
+        </h2>
+        <span
+          className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+          style={{
+            backgroundColor: tone === "coffee" ? "rgba(217,168,90,0.25)" : "rgba(46,28,18,0.15)",
+            color: headerText,
+          }}
+        >
+          {toBnDigits(memos.length)}
+        </span>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
+        {/* Pending section */}
+        {pendingMemos.length > 0 && (
+          <div className="border-b-2 border-yellow-500/40 bg-yellow-50/40 p-3">
+            <div className="mb-2 flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-yellow-700" />
+              <p className="text-sm font-semibold text-yellow-800">
+                ⏳ পেন্ডিং ({toBnDigits(pendingMemos.length)})
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {pendingMemos.map((m) => (
+                <MemoRowItem key={m.id} memo={m} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Confirmed section */}
+        {doneMemos.length === 0 && pendingMemos.length === 0 ? (
+          <div className="py-16 text-center">
+            <BookOpen className="mx-auto h-8 w-8 opacity-30" />
+            <p className="mt-2 text-sm text-muted-foreground">কোনো মেমো নেই</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {doneMemos.map((m) => (
+              <MemoRowItem key={m.id} memo={m} />
             ))}
-            {memos.length === 0 && (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-10 text-center text-muted-foreground"
-                >
-                  <BookOpen className="mx-auto mb-2 h-6 w-6 opacity-40" />
-                  কোনো মেমো পাওয়া যায়নি
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// Single memo row
+// ============================================================
+function MemoRowItem({ memo: m }: { memo: MemoRow }) {
+  const due = Number(m.total) - Number(m.paid);
+  const isDraft = m.status === "draft";
+  const isVoid = m.status === "void";
+
+  return (
+    <Link
+      to="/admin/memo/$id"
+      params={{ id: m.id }}
+      className={`flex items-center gap-3 px-3 py-2.5 transition hover:bg-accent/10 ${
+        isVoid ? "opacity-60" : ""
+      }`}
+    >
+      {/* Memo no badge */}
+      <div
+        className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[10px] font-bold ${
+          isDraft
+            ? "bg-yellow-500/15 text-yellow-700"
+            : isVoid
+              ? "bg-destructive/10 text-destructive"
+              : "bg-primary/10 text-primary"
+        }`}
+      >
+        <span className="text-[8px] uppercase">M</span>
+        <span className="text-xs tabular-nums">
+          {m.memo_no ? String(m.memo_no).padStart(3, "0") : "—"}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-primary">
+          {m.shop_name ?? "(কাস্টমার নেই)"}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {m.party_serial && `${toBnDigits(m.party_serial)} · `}
+          {englishDateBn(m.memo_date).replace(" খ্রিস্টাব্দ", "")}
+          {m.mobile && ` · ${toBnDigits(m.mobile)}`}
+        </p>
+      </div>
+
+      {/* Amount */}
+      <div className="shrink-0 text-right">
+        <p className="text-sm font-bold tabular-nums text-primary">{taka(m.total)}</p>
+        {due > 0 && !isVoid && (
+          <p className="text-[10px] tabular-nums text-destructive">বাকি {taka(due)}</p>
+        )}
+        {isDraft && <p className="text-[10px] font-medium text-yellow-700">চলবে</p>}
+        {isVoid && <p className="text-[10px] font-medium text-destructive">বাতিল</p>}
+      </div>
+    </Link>
   );
 }

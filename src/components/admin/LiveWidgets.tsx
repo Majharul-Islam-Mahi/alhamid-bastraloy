@@ -27,9 +27,7 @@ export function LiveWidgets() {
       const dueMap: Record<string, number> = {};
       for (const m of memos ?? []) {
         if (!m.party_id) continue;
-        dueMap[m.party_id] =
-          (dueMap[m.party_id] ?? 0) +
-          (Number(m.total) - Number(m.paid));
+        dueMap[m.party_id] = (dueMap[m.party_id] ?? 0) + (Number(m.total) - Number(m.paid));
       }
       for (const d of deposits ?? []) {
         if (!d.party_id) continue;
@@ -48,9 +46,7 @@ export function LiveWidgets() {
   const { data: customerCount = 0 } = useQuery({
     queryKey: ["widget-customer-count"],
     queryFn: async () => {
-      const { count } = await supabase
-        .from("parties")
-        .select("id", { count: "exact", head: true });
+      const { count } = await supabase.from("parties").select("id", { count: "exact", head: true });
       return count ?? 0;
     },
   });
@@ -90,9 +86,7 @@ export function LiveWidgets() {
       <div className="rounded-2xl border bg-card p-5 shadow-card lg:col-span-2">
         <div className="mb-3 flex items-center gap-2">
           <AlertCircle className="h-5 w-5 text-destructive" />
-          <h3 className="font-display text-lg text-primary">
-            সর্বোচ্চ বাকিদার (৫ জন)
-          </h3>
+          <h3 className="font-display text-lg text-primary">সর্বোচ্চ বাকিদার (৫ জন)</h3>
         </div>
         <ul className="space-y-1.5">
           {topDues.map((p) => (
@@ -106,9 +100,7 @@ export function LiveWidgets() {
                 className="min-w-0 flex-1 truncate font-medium hover:text-primary"
               >
                 {p.shop_name}{" "}
-                <span className="text-xs text-muted-foreground">
-                  ({toBnDigits(p.serial)})
-                </span>
+                <span className="text-xs text-muted-foreground">({toBnDigits(p.serial)})</span>
               </Link>
               <span className="shrink-0 font-bold tabular-nums text-destructive">
                 {taka(p.due)}
@@ -116,9 +108,7 @@ export function LiveWidgets() {
             </li>
           ))}
           {topDues.length === 0 && (
-            <li className="py-4 text-center text-sm text-muted-foreground">
-              কোনো বাকি নেই 🎉
-            </li>
+            <li className="py-4 text-center text-sm text-muted-foreground">কোনো বাকি নেই 🎉</li>
           )}
         </ul>
       </div>
@@ -127,21 +117,15 @@ export function LiveWidgets() {
       <div className="space-y-4">
         <div className="rounded-2xl border bg-card p-5 shadow-card">
           <Users className="h-5 w-5 text-primary" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            মোট পার্টি
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">মোট পার্টি</p>
           <p className="mt-1 font-display text-3xl text-primary tabular-nums">
             {toBnDigits(customerCount)}
           </p>
         </div>
         <div className="rounded-2xl border bg-card p-5 shadow-card">
           <TrendingUp className="h-5 w-5 text-success" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            এই মাসের বিক্রি
-          </p>
-          <p className="mt-1 font-display text-3xl text-success tabular-nums">
-            {taka(monthSales)}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">এই মাসের বিক্রি</p>
+          <p className="mt-1 font-display text-3xl text-success tabular-nums">{taka(monthSales)}</p>
         </div>
       </div>
 
@@ -150,24 +134,15 @@ export function LiveWidgets() {
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 shadow-card lg:col-span-3">
           <div className="mb-3 flex items-center gap-2">
             <Package className="h-5 w-5 text-destructive" />
-            <h3 className="font-display text-lg text-destructive">
-              কম স্টক সতর্কতা (৫-এর নিচে)
-            </h3>
-            <Link
-              to="/admin/stock"
-              className="ml-auto text-sm text-primary underline"
-            >
+            <h3 className="font-display text-lg text-destructive">কম স্টক সতর্কতা (৫-এর নিচে)</h3>
+            <Link to="/admin/stock" className="ml-auto text-sm text-primary underline">
               স্টক দেখুন
             </Link>
           </div>
           <div className="flex flex-wrap gap-2">
             {lowStock.map((p) => (
-              <span
-                key={p.id}
-                className="rounded-full border bg-card px-3 py-1 text-sm"
-              >
-                <strong>{p.name}</strong> — {toBnDigits(p.quantity)}{" "}
-                {p.unit}
+              <span key={p.id} className="rounded-full border bg-card px-3 py-1 text-sm">
+                <strong>{p.name}</strong> — {toBnDigits(p.quantity)} {p.unit}
               </span>
             ))}
           </div>

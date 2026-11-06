@@ -1,0 +1,68 @@
+{
+  "name": "আল হামিদ বস্ত্রালয়",
+  "short_name": "আল হামিদ",
+  "description": "আল হামিদ বস্ত্রালয় — ফেনীর বিশ্বস্ত পাইকারি ও খুচরা কাপড়ের দোকান",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5efe6",
+  "theme_color": "#3a2318",
+  "lang": "bn",
+  "dir": "ltr",
+  "categories": ["business", "finance", "shopping"],
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "816x816",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "816x816",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "816x816",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192-maskable.png",
+      "sizes": "816x816",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "আমার হিসাব",
+      "short_name": "হিসাব",
+      "url": "/account",
+      "description": "কাস্টমার ড্যাশবোর্ড",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "816x816",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "ড্যাশবোর্ড",
+      "short_name": "Admin",
+      "url": "/admin",
+      "description": "Admin dashboard",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "816x816",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

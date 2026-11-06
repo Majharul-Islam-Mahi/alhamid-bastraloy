@@ -1,5 +1,6 @@
 // src/components/shop/LoginForm.tsx
 // দুই ধাপের লগইন: (সিরিয়াল) + মোবাইল + পাসওয়ার্ড → OTP
+// [REDESIGNED] center aligned, premium coffee theme, better visual hierarchy
 import { useState } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -107,41 +108,67 @@ export function LoginForm({
     }
   }
 
+  // ============== Stepper (premium) ==============
   const stepper = (
-    <div className="mb-6 flex items-center justify-center gap-3 text-sm">
-      {[1, 2].map((s) => (
-        <div key={s} className="flex items-center gap-2">
-          <span
-            className={`flex h-8 w-8 items-center justify-center rounded-full font-semibold transition-colors ${
-              step >= s
-                ? "bg-primary text-primary-foreground shadow-soft"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {toBnDigits(s)}
-          </span>
-          <span className={step >= s ? "font-semibold text-primary" : "text-muted-foreground"}>
-            {s === 1 ? "তথ্য দিন" : "OTP যাচাই"}
-          </span>
-          {s === 1 && <span className="mx-1 h-px w-8 bg-border" />}
-        </div>
-      ))}
+    <div className="mb-8 flex items-center justify-center gap-2">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-all ${
+            step >= 1
+              ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/30"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {toBnDigits(1)}
+        </span>
+        <span
+          className={`text-sm font-semibold ${
+            step >= 1 ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          তথ্য দিন
+        </span>
+      </div>
+      <div
+        className={`h-0.5 w-10 rounded-full transition-colors ${
+          step >= 2 ? "bg-primary" : "bg-border"
+        }`}
+      />
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-all ${
+            step >= 2
+              ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/30"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {toBnDigits(2)}
+        </span>
+        <span
+          className={`text-sm font-semibold ${
+            step >= 2 ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          OTP যাচাই
+        </span>
+      </div>
     </div>
   );
 
+  // ============== Step 2: OTP ==============
   if (step === 2) {
     const Icon = challenge ? channelIcon[challenge.channel] : Phone;
     const label = challenge ? channelLabel[challenge.channel] : "OTP";
 
     return (
-      <form onSubmit={step2} className="space-y-5">
+      <form onSubmit={step2} className="space-y-6">
         {stepper}
 
-        <div className="rounded-xl border-2 border-accent/40 bg-linear-to-br from-accent/10 to-accent/5 p-4 text-center">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/20 text-primary">
-            <Icon className="h-5 w-5" />
+        <div className="rounded-2xl border-2 border-accent/40 bg-gradient-to-br from-accent/10 to-accent/5 p-5 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 text-primary">
+            <Icon className="h-6 w-6" />
           </div>
-          <p className="mt-2 text-sm font-medium text-primary">
+          <p className="mt-3 text-sm font-semibold text-primary">
             {challenge?.isDemo
               ? "পরীক্ষামূলক মোড — কোড নিচে দেখানো হচ্ছে"
               : `${label}-এ ৬ সংখ্যার একটি কোড পাঠানো হয়েছে`}
@@ -149,7 +176,7 @@ export function LoginForm({
           <p className="mt-1 text-xs text-muted-foreground">মোবাইল: {toBnDigits(mobile)}</p>
 
           {challenge?.isDemo && challenge.demoCode && (
-            <div className="mt-4 rounded-lg bg-card p-3 shadow-sm">
+            <div className="mt-4 rounded-xl bg-card p-4 shadow-sm">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground">ডেমো কোড</p>
               <p className="mt-1 font-mono text-3xl font-bold tracking-[0.5em] text-primary">
                 {challenge.demoCode}
@@ -159,7 +186,7 @@ export function LoginForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="otp" className="block text-center">
+          <Label htmlFor="otp" className="block text-center text-sm font-semibold">
             ৬ সংখ্যার OTP কোড লিখুন
           </Label>
           <Input
@@ -168,7 +195,7 @@ export function LoginForm({
             maxLength={6}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            className="h-14 text-center font-mono text-2xl tracking-[0.4em]"
+            className="h-16 text-center font-mono text-3xl tracking-[0.4em]"
             required
             autoFocus
           />
@@ -178,7 +205,7 @@ export function LoginForm({
           type="submit"
           variant="coffee"
           size="lg"
-          className="w-full"
+          className="w-full shadow-soft"
           disabled={busy || code.length !== 6}
         >
           <ShieldCheck /> যাচাই করে লগইন করুন
@@ -190,14 +217,15 @@ export function LoginForm({
             setStep(1);
             setCode("");
           }}
-          className="w-full text-center text-sm text-muted-foreground underline hover:text-primary"
+          className="w-full text-center text-sm text-muted-foreground underline decoration-primary/40 underline-offset-4 hover:text-primary"
         >
-          আগের ধাপে ফিরুন
+          ← আগের ধাপে ফিরুন
         </button>
       </form>
     );
   }
 
+  // ============== Step 1: Credentials ==============
   return (
     <form onSubmit={step1} className="space-y-5">
       {!compact && stepper}
@@ -213,7 +241,7 @@ export function LoginForm({
             placeholder="Customer001"
             value={serial}
             onChange={(e) => setSerial(e.target.value)}
-            className="h-11 pl-9"
+            className="h-11 pl-10"
             required
           />
         </Field>
@@ -226,7 +254,7 @@ export function LoginForm({
           placeholder="01XXXXXXXXX"
           value={mobile}
           onChange={(e) => setMobile(e.target.value)}
-          className="h-11 pl-9"
+          className="h-11 pl-10"
           required
         />
       </Field>
@@ -238,19 +266,25 @@ export function LoginForm({
           placeholder="••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="h-11 pl-9"
+          className="h-11 pl-10"
           required
         />
       </Field>
 
-      <Button type="submit" variant="coffee" size="lg" className="w-full" disabled={busy}>
+      <Button
+        type="submit"
+        variant="coffee"
+        size="lg"
+        className="w-full shadow-soft"
+        disabled={busy}
+      >
         পরবর্তী ধাপ <ArrowRight />
       </Button>
 
-      <div className="flex flex-col items-center gap-2 pt-1">
+      <div className="flex flex-col items-center gap-2 pt-2">
         <Link
           to="/login/forgot"
-          className="text-sm text-primary underline-offset-4 hover:underline"
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
         >
           পাসওয়ার্ড ভুলে গেছেন?
         </Link>
@@ -275,7 +309,9 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id} className="text-sm font-semibold text-primary/90">
+        {label}
+      </Label>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
           {icon}

@@ -13,19 +13,10 @@ import { supabase } from "@/integrations/supabase/client";
  *   মোট বাকি = ১০০০০০ − ৩০০০০ = ৭০০০০
  */
 export async function partyDue(partyId: string): Promise<number> {
-  const [{ data: memos, error: e1 }, { data: deposits, error: e2 }] =
-    await Promise.all([
-      supabase
-        .from("memos")
-        .select("total, paid")
-        .eq("party_id", partyId)
-        .eq("status", "confirmed"),
-      supabase
-        .from("day_entries")
-        .select("amount")
-        .eq("party_id", partyId)
-        .eq("kind", "deposit"),
-    ]);
+  const [{ data: memos, error: e1 }, { data: deposits, error: e2 }] = await Promise.all([
+    supabase.from("memos").select("total, paid").eq("party_id", partyId).eq("status", "confirmed"),
+    supabase.from("day_entries").select("amount").eq("party_id", partyId).eq("kind", "deposit"),
+  ]);
 
   if (e1) console.error("partyDue memos error:", e1);
   if (e2) console.error("partyDue deposits error:", e2);
@@ -35,10 +26,7 @@ export async function partyDue(partyId: string): Promise<number> {
     0,
   );
 
-  const depositTotal = (deposits ?? []).reduce(
-    (s, d) => s + Number(d.amount ?? 0),
-    0,
-  );
+  const depositTotal = (deposits ?? []).reduce((s, d) => s + Number(d.amount ?? 0), 0);
 
   return memoDue - depositTotal;
 }
@@ -46,9 +34,7 @@ export async function partyDue(partyId: string): Promise<number> {
 /**
  * একাধিক পার্টির বাকি একসাথে বের করে (পারফরম্যান্স ভালো)।
  */
-export async function partiesDue(
-  partyIds: string[],
-): Promise<Record<string, number>> {
+export async function partiesDue(partyIds: string[]): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   await Promise.all(
     partyIds.map(async (id) => {
@@ -81,9 +67,7 @@ export async function supplierDue(partyId: string): Promise<number> {
 /**
  * একাধিক সাপ্লায়ারের দেনা একসাথে।
  */
-export async function suppliersDue(
-  partyIds: string[],
-): Promise<Record<string, number>> {
+export async function suppliersDue(partyIds: string[]): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   await Promise.all(
     partyIds.map(async (id) => {

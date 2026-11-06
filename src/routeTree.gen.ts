@@ -14,25 +14,35 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as LoginAdminRouteImport } from './routes/login.admin'
 import { Route as LoginCustomerRouteImport } from './routes/login.customer'
 import { Route as LoginForgotRouteImport } from './routes/login.forgot'
+import { Route as AuthenticatedAccountMessagesRouteImport } from './routes/_authenticated/account_.messages'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAreasRouteImport } from './routes/_authenticated/admin.areas'
+import { Route as AuthenticatedAdminAuditLogsRouteImport } from './routes/_authenticated/admin.audit-logs'
 import { Route as AuthenticatedAdminCalculatorRouteImport } from './routes/_authenticated/admin.calculator'
 import { Route as AuthenticatedAdminCalendarRouteImport } from './routes/_authenticated/admin.calendar'
 import { Route as AuthenticatedAdminCashRouteImport } from './routes/_authenticated/admin.cash'
+import { Route as AuthenticatedAdminCategoriesRouteImport } from './routes/_authenticated/admin.categories'
 import { Route as AuthenticatedAdminCollectionRouteImport } from './routes/_authenticated/admin.collection'
 import { Route as AuthenticatedAdminDenaRouteImport } from './routes/_authenticated/admin.dena'
+import { Route as AuthenticatedAdminErrorLogsRouteImport } from './routes/_authenticated/admin.error-logs'
 import { Route as AuthenticatedAdminHalkhataRouteImport } from './routes/_authenticated/admin.halkhata'
+import { Route as AuthenticatedAdminImportRouteImport } from './routes/_authenticated/admin.import'
 import { Route as AuthenticatedAdminKhataRouteImport } from './routes/_authenticated/admin.khata'
+import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin.messages'
+import { Route as AuthenticatedAdminMigrateRouteImport } from './routes/_authenticated/admin.migrate'
 import { Route as AuthenticatedAdminPaonaRouteImport } from './routes/_authenticated/admin.paona'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
+import { Route as AuthenticatedAdminReportsListRouteImport } from './routes/_authenticated/admin.reports-list'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminStockRouteImport } from './routes/_authenticated/admin.stock'
+import { Route as AuthenticatedAdminUptimeRouteImport } from './routes/_authenticated/admin.uptime'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminWholesaleRouteImport } from './routes/_authenticated/admin.wholesale'
-import { Route as AuthenticatedAccountMemoIdRouteImport } from './routes/_authenticated/account.memo.$id'
+import { Route as AuthenticatedAccountMemoIdRouteImport } from './routes/_authenticated/account_.memo.$id'
 import { Route as AuthenticatedAdminCollectionHistoryRouteImport } from './routes/_authenticated/admin.collection.history'
 import { Route as AuthenticatedAdminDenaIdRouteImport } from './routes/_authenticated/admin.dena.$id'
 import { Route as AuthenticatedAdminMemoIndexRouteImport } from './routes/_authenticated/admin.memo.index'
@@ -64,6 +74,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginAdminRoute = LoginAdminRouteImport.update({
   id: '/login/admin',
   path: '/login/admin',
@@ -79,6 +94,12 @@ const LoginForgotRoute = LoginForgotRouteImport.update({
   path: '/login/forgot',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAccountMessagesRoute =
+  AuthenticatedAccountMessagesRouteImport.update({
+    id: '/account_/messages',
+    path: '/account/messages',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -89,6 +110,12 @@ const AuthenticatedAdminAreasRoute = AuthenticatedAdminAreasRouteImport.update({
   path: '/areas',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminAuditLogsRoute =
+  AuthenticatedAdminAuditLogsRouteImport.update({
+    id: '/audit-logs',
+    path: '/audit-logs',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminCalculatorRoute =
   AuthenticatedAdminCalculatorRouteImport.update({
     id: '/calculator',
@@ -106,6 +133,12 @@ const AuthenticatedAdminCashRoute = AuthenticatedAdminCashRouteImport.update({
   path: '/cash',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminCategoriesRoute =
+  AuthenticatedAdminCategoriesRouteImport.update({
+    id: '/categories',
+    path: '/categories',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminCollectionRoute =
   AuthenticatedAdminCollectionRouteImport.update({
     id: '/collection',
@@ -117,10 +150,22 @@ const AuthenticatedAdminDenaRoute = AuthenticatedAdminDenaRouteImport.update({
   path: '/dena',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminErrorLogsRoute =
+  AuthenticatedAdminErrorLogsRouteImport.update({
+    id: '/error-logs',
+    path: '/error-logs',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminHalkhataRoute =
   AuthenticatedAdminHalkhataRouteImport.update({
     id: '/halkhata',
     path: '/halkhata',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminImportRoute =
+  AuthenticatedAdminImportRouteImport.update({
+    id: '/import',
+    path: '/import',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminKhataRoute = AuthenticatedAdminKhataRouteImport.update({
@@ -128,6 +173,18 @@ const AuthenticatedAdminKhataRoute = AuthenticatedAdminKhataRouteImport.update({
   path: '/khata',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminMessagesRoute =
+  AuthenticatedAdminMessagesRouteImport.update({
+    id: '/messages',
+    path: '/messages',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminMigrateRoute =
+  AuthenticatedAdminMigrateRouteImport.update({
+    id: '/migrate',
+    path: '/migrate',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminPaonaRoute = AuthenticatedAdminPaonaRouteImport.update({
   id: '/paona',
   path: '/paona',
@@ -137,6 +194,12 @@ const AuthenticatedAdminReportsRoute =
   AuthenticatedAdminReportsRouteImport.update({
     id: '/reports',
     path: '/reports',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminReportsListRoute =
+  AuthenticatedAdminReportsListRouteImport.update({
+    id: '/reports-list',
+    path: '/reports-list',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminSettingsRoute =
@@ -150,6 +213,12 @@ const AuthenticatedAdminStockRoute = AuthenticatedAdminStockRouteImport.update({
   path: '/stock',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminUptimeRoute =
+  AuthenticatedAdminUptimeRouteImport.update({
+    id: '/uptime',
+    path: '/uptime',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -163,9 +232,9 @@ const AuthenticatedAdminWholesaleRoute =
   } as any)
 const AuthenticatedAccountMemoIdRoute =
   AuthenticatedAccountMemoIdRouteImport.update({
-    id: '/memo/$id',
-    path: '/memo/$id',
-    getParentRoute: () => AuthenticatedAccountRoute,
+    id: '/account_/memo/$id',
+    path: '/account/memo/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedAdminCollectionHistoryRoute =
   AuthenticatedAdminCollectionHistoryRouteImport.update({
@@ -207,23 +276,33 @@ const AuthenticatedAdminPartyIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
-  '/account': typeof AuthenticatedAccountRouteWithChildren
+  '/account': typeof AuthenticatedAccountRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/customer': typeof LoginCustomerRoute
   '/login/forgot': typeof LoginForgotRoute
+  '/account/messages': typeof AuthenticatedAccountMessagesRoute
   '/admin/areas': typeof AuthenticatedAdminAreasRoute
+  '/admin/audit-logs': typeof AuthenticatedAdminAuditLogsRoute
   '/admin/calculator': typeof AuthenticatedAdminCalculatorRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cash': typeof AuthenticatedAdminCashRoute
+  '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/collection': typeof AuthenticatedAdminCollectionRouteWithChildren
   '/admin/dena': typeof AuthenticatedAdminDenaRouteWithChildren
+  '/admin/error-logs': typeof AuthenticatedAdminErrorLogsRoute
   '/admin/halkhata': typeof AuthenticatedAdminHalkhataRoute
+  '/admin/import': typeof AuthenticatedAdminImportRoute
   '/admin/khata': typeof AuthenticatedAdminKhataRoute
+  '/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/admin/migrate': typeof AuthenticatedAdminMigrateRoute
   '/admin/paona': typeof AuthenticatedAdminPaonaRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/admin/reports-list': typeof AuthenticatedAdminReportsListRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/admin/uptime': typeof AuthenticatedAdminUptimeRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/wholesale': typeof AuthenticatedAdminWholesaleRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -238,22 +317,32 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
-  '/account': typeof AuthenticatedAccountRouteWithChildren
+  '/account': typeof AuthenticatedAccountRoute
+  '/api/health': typeof ApiHealthRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/customer': typeof LoginCustomerRoute
   '/login/forgot': typeof LoginForgotRoute
+  '/account/messages': typeof AuthenticatedAccountMessagesRoute
   '/admin/areas': typeof AuthenticatedAdminAreasRoute
+  '/admin/audit-logs': typeof AuthenticatedAdminAuditLogsRoute
   '/admin/calculator': typeof AuthenticatedAdminCalculatorRoute
   '/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/admin/cash': typeof AuthenticatedAdminCashRoute
+  '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/collection': typeof AuthenticatedAdminCollectionRouteWithChildren
   '/admin/dena': typeof AuthenticatedAdminDenaRouteWithChildren
+  '/admin/error-logs': typeof AuthenticatedAdminErrorLogsRoute
   '/admin/halkhata': typeof AuthenticatedAdminHalkhataRoute
+  '/admin/import': typeof AuthenticatedAdminImportRoute
   '/admin/khata': typeof AuthenticatedAdminKhataRoute
+  '/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/admin/migrate': typeof AuthenticatedAdminMigrateRoute
   '/admin/paona': typeof AuthenticatedAdminPaonaRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/admin/reports-list': typeof AuthenticatedAdminReportsListRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/admin/uptime': typeof AuthenticatedAdminUptimeRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/wholesale': typeof AuthenticatedAdminWholesaleRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -270,27 +359,37 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/setup': typeof SetupRoute
-  '/_authenticated/account': typeof AuthenticatedAccountRouteWithChildren
+  '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/api/health': typeof ApiHealthRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/customer': typeof LoginCustomerRoute
   '/login/forgot': typeof LoginForgotRoute
+  '/_authenticated/account_/messages': typeof AuthenticatedAccountMessagesRoute
   '/_authenticated/admin/areas': typeof AuthenticatedAdminAreasRoute
+  '/_authenticated/admin/audit-logs': typeof AuthenticatedAdminAuditLogsRoute
   '/_authenticated/admin/calculator': typeof AuthenticatedAdminCalculatorRoute
   '/_authenticated/admin/calendar': typeof AuthenticatedAdminCalendarRoute
   '/_authenticated/admin/cash': typeof AuthenticatedAdminCashRoute
+  '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/_authenticated/admin/collection': typeof AuthenticatedAdminCollectionRouteWithChildren
   '/_authenticated/admin/dena': typeof AuthenticatedAdminDenaRouteWithChildren
+  '/_authenticated/admin/error-logs': typeof AuthenticatedAdminErrorLogsRoute
   '/_authenticated/admin/halkhata': typeof AuthenticatedAdminHalkhataRoute
+  '/_authenticated/admin/import': typeof AuthenticatedAdminImportRoute
   '/_authenticated/admin/khata': typeof AuthenticatedAdminKhataRoute
+  '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
+  '/_authenticated/admin/migrate': typeof AuthenticatedAdminMigrateRoute
   '/_authenticated/admin/paona': typeof AuthenticatedAdminPaonaRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
+  '/_authenticated/admin/reports-list': typeof AuthenticatedAdminReportsListRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/_authenticated/admin/uptime': typeof AuthenticatedAdminUptimeRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/wholesale': typeof AuthenticatedAdminWholesaleRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
-  '/_authenticated/account/memo/$id': typeof AuthenticatedAccountMemoIdRoute
+  '/_authenticated/account_/memo/$id': typeof AuthenticatedAccountMemoIdRoute
   '/_authenticated/admin/collection/history': typeof AuthenticatedAdminCollectionHistoryRoute
   '/_authenticated/admin/dena/$id': typeof AuthenticatedAdminDenaIdRoute
   '/_authenticated/admin/memo/$id': typeof AuthenticatedAdminMemoIdRoute
@@ -305,21 +404,31 @@ export interface FileRouteTypes {
     | '/setup'
     | '/account'
     | '/admin'
+    | '/api/health'
     | '/login/admin'
     | '/login/customer'
     | '/login/forgot'
+    | '/account/messages'
     | '/admin/areas'
+    | '/admin/audit-logs'
     | '/admin/calculator'
     | '/admin/calendar'
     | '/admin/cash'
+    | '/admin/categories'
     | '/admin/collection'
     | '/admin/dena'
+    | '/admin/error-logs'
     | '/admin/halkhata'
+    | '/admin/import'
     | '/admin/khata'
+    | '/admin/messages'
+    | '/admin/migrate'
     | '/admin/paona'
     | '/admin/reports'
+    | '/admin/reports-list'
     | '/admin/settings'
     | '/admin/stock'
+    | '/admin/uptime'
     | '/admin/users'
     | '/admin/wholesale'
     | '/admin/'
@@ -335,21 +444,31 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/account'
+    | '/api/health'
     | '/login/admin'
     | '/login/customer'
     | '/login/forgot'
+    | '/account/messages'
     | '/admin/areas'
+    | '/admin/audit-logs'
     | '/admin/calculator'
     | '/admin/calendar'
     | '/admin/cash'
+    | '/admin/categories'
     | '/admin/collection'
     | '/admin/dena'
+    | '/admin/error-logs'
     | '/admin/halkhata'
+    | '/admin/import'
     | '/admin/khata'
+    | '/admin/messages'
+    | '/admin/migrate'
     | '/admin/paona'
     | '/admin/reports'
+    | '/admin/reports-list'
     | '/admin/settings'
     | '/admin/stock'
+    | '/admin/uptime'
     | '/admin/users'
     | '/admin/wholesale'
     | '/admin'
@@ -367,25 +486,35 @@ export interface FileRouteTypes {
     | '/setup'
     | '/_authenticated/account'
     | '/_authenticated/admin'
+    | '/api/health'
     | '/login/admin'
     | '/login/customer'
     | '/login/forgot'
+    | '/_authenticated/account_/messages'
     | '/_authenticated/admin/areas'
+    | '/_authenticated/admin/audit-logs'
     | '/_authenticated/admin/calculator'
     | '/_authenticated/admin/calendar'
     | '/_authenticated/admin/cash'
+    | '/_authenticated/admin/categories'
     | '/_authenticated/admin/collection'
     | '/_authenticated/admin/dena'
+    | '/_authenticated/admin/error-logs'
     | '/_authenticated/admin/halkhata'
+    | '/_authenticated/admin/import'
     | '/_authenticated/admin/khata'
+    | '/_authenticated/admin/messages'
+    | '/_authenticated/admin/migrate'
     | '/_authenticated/admin/paona'
     | '/_authenticated/admin/reports'
+    | '/_authenticated/admin/reports-list'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/stock'
+    | '/_authenticated/admin/uptime'
     | '/_authenticated/admin/users'
     | '/_authenticated/admin/wholesale'
     | '/_authenticated/admin/'
-    | '/_authenticated/account/memo/$id'
+    | '/_authenticated/account_/memo/$id'
     | '/_authenticated/admin/collection/history'
     | '/_authenticated/admin/dena/$id'
     | '/_authenticated/admin/memo/$id'
@@ -398,6 +527,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   SetupRoute: typeof SetupRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   LoginAdminRoute: typeof LoginAdminRoute
   LoginCustomerRoute: typeof LoginCustomerRoute
   LoginForgotRoute: typeof LoginForgotRoute
@@ -440,6 +570,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login/admin': {
       id: '/login/admin'
       path: '/login/admin'
@@ -461,6 +598,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginForgotRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/account_/messages': {
+      id: '/_authenticated/account_/messages'
+      path: '/account/messages'
+      fullPath: '/account/messages'
+      preLoaderRoute: typeof AuthenticatedAccountMessagesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
       path: '/'
@@ -473,6 +617,13 @@ declare module '@tanstack/react-router' {
       path: '/areas'
       fullPath: '/admin/areas'
       preLoaderRoute: typeof AuthenticatedAdminAreasRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/audit-logs': {
+      id: '/_authenticated/admin/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/admin/audit-logs'
+      preLoaderRoute: typeof AuthenticatedAdminAuditLogsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/calculator': {
@@ -496,6 +647,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCashRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/categories': {
+      id: '/_authenticated/admin/categories'
+      path: '/categories'
+      fullPath: '/admin/categories'
+      preLoaderRoute: typeof AuthenticatedAdminCategoriesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/collection': {
       id: '/_authenticated/admin/collection'
       path: '/collection'
@@ -510,6 +668,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminDenaRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/error-logs': {
+      id: '/_authenticated/admin/error-logs'
+      path: '/error-logs'
+      fullPath: '/admin/error-logs'
+      preLoaderRoute: typeof AuthenticatedAdminErrorLogsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/halkhata': {
       id: '/_authenticated/admin/halkhata'
       path: '/halkhata'
@@ -517,11 +682,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminHalkhataRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/import': {
+      id: '/_authenticated/admin/import'
+      path: '/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof AuthenticatedAdminImportRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/khata': {
       id: '/_authenticated/admin/khata'
       path: '/khata'
       fullPath: '/admin/khata'
       preLoaderRoute: typeof AuthenticatedAdminKhataRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/messages': {
+      id: '/_authenticated/admin/messages'
+      path: '/messages'
+      fullPath: '/admin/messages'
+      preLoaderRoute: typeof AuthenticatedAdminMessagesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/migrate': {
+      id: '/_authenticated/admin/migrate'
+      path: '/migrate'
+      fullPath: '/admin/migrate'
+      preLoaderRoute: typeof AuthenticatedAdminMigrateRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/paona': {
@@ -538,6 +724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminReportsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/reports-list': {
+      id: '/_authenticated/admin/reports-list'
+      path: '/reports-list'
+      fullPath: '/admin/reports-list'
+      preLoaderRoute: typeof AuthenticatedAdminReportsListRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -550,6 +743,13 @@ declare module '@tanstack/react-router' {
       path: '/stock'
       fullPath: '/admin/stock'
       preLoaderRoute: typeof AuthenticatedAdminStockRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/uptime': {
+      id: '/_authenticated/admin/uptime'
+      path: '/uptime'
+      fullPath: '/admin/uptime'
+      preLoaderRoute: typeof AuthenticatedAdminUptimeRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/users': {
@@ -566,12 +766,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminWholesaleRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
-    '/_authenticated/account/memo/$id': {
-      id: '/_authenticated/account/memo/$id'
-      path: '/memo/$id'
+    '/_authenticated/account_/memo/$id': {
+      id: '/_authenticated/account_/memo/$id'
+      path: '/account/memo/$id'
       fullPath: '/account/memo/$id'
       preLoaderRoute: typeof AuthenticatedAccountMemoIdRouteImport
-      parentRoute: typeof AuthenticatedAccountRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin/collection/history': {
       id: '/_authenticated/admin/collection/history'
@@ -618,17 +818,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthenticatedAccountRouteChildren {
-  AuthenticatedAccountMemoIdRoute: typeof AuthenticatedAccountMemoIdRoute
-}
-
-const AuthenticatedAccountRouteChildren: AuthenticatedAccountRouteChildren = {
-  AuthenticatedAccountMemoIdRoute: AuthenticatedAccountMemoIdRoute,
-}
-
-const AuthenticatedAccountRouteWithChildren =
-  AuthenticatedAccountRoute._addFileChildren(AuthenticatedAccountRouteChildren)
-
 interface AuthenticatedAdminCollectionRouteChildren {
   AuthenticatedAdminCollectionHistoryRoute: typeof AuthenticatedAdminCollectionHistoryRoute
 }
@@ -660,17 +849,25 @@ const AuthenticatedAdminDenaRouteWithChildren =
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAreasRoute: typeof AuthenticatedAdminAreasRoute
+  AuthenticatedAdminAuditLogsRoute: typeof AuthenticatedAdminAuditLogsRoute
   AuthenticatedAdminCalculatorRoute: typeof AuthenticatedAdminCalculatorRoute
   AuthenticatedAdminCalendarRoute: typeof AuthenticatedAdminCalendarRoute
   AuthenticatedAdminCashRoute: typeof AuthenticatedAdminCashRoute
+  AuthenticatedAdminCategoriesRoute: typeof AuthenticatedAdminCategoriesRoute
   AuthenticatedAdminCollectionRoute: typeof AuthenticatedAdminCollectionRouteWithChildren
   AuthenticatedAdminDenaRoute: typeof AuthenticatedAdminDenaRouteWithChildren
+  AuthenticatedAdminErrorLogsRoute: typeof AuthenticatedAdminErrorLogsRoute
   AuthenticatedAdminHalkhataRoute: typeof AuthenticatedAdminHalkhataRoute
+  AuthenticatedAdminImportRoute: typeof AuthenticatedAdminImportRoute
   AuthenticatedAdminKhataRoute: typeof AuthenticatedAdminKhataRoute
+  AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
+  AuthenticatedAdminMigrateRoute: typeof AuthenticatedAdminMigrateRoute
   AuthenticatedAdminPaonaRoute: typeof AuthenticatedAdminPaonaRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
+  AuthenticatedAdminReportsListRoute: typeof AuthenticatedAdminReportsListRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminStockRoute: typeof AuthenticatedAdminStockRoute
+  AuthenticatedAdminUptimeRoute: typeof AuthenticatedAdminUptimeRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminWholesaleRoute: typeof AuthenticatedAdminWholesaleRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -682,18 +879,26 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAreasRoute: AuthenticatedAdminAreasRoute,
+  AuthenticatedAdminAuditLogsRoute: AuthenticatedAdminAuditLogsRoute,
   AuthenticatedAdminCalculatorRoute: AuthenticatedAdminCalculatorRoute,
   AuthenticatedAdminCalendarRoute: AuthenticatedAdminCalendarRoute,
   AuthenticatedAdminCashRoute: AuthenticatedAdminCashRoute,
+  AuthenticatedAdminCategoriesRoute: AuthenticatedAdminCategoriesRoute,
   AuthenticatedAdminCollectionRoute:
     AuthenticatedAdminCollectionRouteWithChildren,
   AuthenticatedAdminDenaRoute: AuthenticatedAdminDenaRouteWithChildren,
+  AuthenticatedAdminErrorLogsRoute: AuthenticatedAdminErrorLogsRoute,
   AuthenticatedAdminHalkhataRoute: AuthenticatedAdminHalkhataRoute,
+  AuthenticatedAdminImportRoute: AuthenticatedAdminImportRoute,
   AuthenticatedAdminKhataRoute: AuthenticatedAdminKhataRoute,
+  AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
+  AuthenticatedAdminMigrateRoute: AuthenticatedAdminMigrateRoute,
   AuthenticatedAdminPaonaRoute: AuthenticatedAdminPaonaRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
+  AuthenticatedAdminReportsListRoute: AuthenticatedAdminReportsListRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminStockRoute: AuthenticatedAdminStockRoute,
+  AuthenticatedAdminUptimeRoute: AuthenticatedAdminUptimeRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminWholesaleRoute: AuthenticatedAdminWholesaleRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
@@ -707,13 +912,17 @@ const AuthenticatedAdminRouteWithChildren =
   AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAccountRoute: typeof AuthenticatedAccountRouteWithChildren
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedAccountMessagesRoute: typeof AuthenticatedAccountMessagesRoute
+  AuthenticatedAccountMemoIdRoute: typeof AuthenticatedAccountMemoIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAccountRoute: AuthenticatedAccountRouteWithChildren,
+  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedAccountMessagesRoute: AuthenticatedAccountMessagesRoute,
+  AuthenticatedAccountMemoIdRoute: AuthenticatedAccountMemoIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -723,6 +932,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   SetupRoute: SetupRoute,
+  ApiHealthRoute: ApiHealthRoute,
   LoginAdminRoute: LoginAdminRoute,
   LoginCustomerRoute: LoginCustomerRoute,
   LoginForgotRoute: LoginForgotRoute,

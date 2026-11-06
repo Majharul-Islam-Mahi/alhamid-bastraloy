@@ -1,12 +1,14 @@
 // src/routes/_authenticated/admin.wholesale.tsx
 // পাইকারি পাওনা খাতা — কাস্টমার তালিকা
+// [FIXED] C001 serial format, Bengali digit search, better form UX
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Search, UserPlus, HandCoins } from "lucide-react";
+import { Search, UserPlus, HandCoins, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { taka, toBnDigits, normalizeMobile } from "@/lib/shop";
+import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
 import { partyDue } from "@/lib/ledger";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -26,10 +28,23 @@ type Party = {
   address: string | null;
 };
 
+// ✅ FIX: C001 format (handles both old "001" and new "C001")
+function suggestNextSerial(existing: string[]): string {
+  const nums = existing
+    .map((s) => {
+      const m = s.match(/^C?(\d+)$/i);
+      return m && m[1] ? parseInt(m[1], 10) : NaN;
+    })
+    .filter((n) => !isNaN(n));
+  const max = nums.length ? Math.max(...nums) : 0;
+  return `C${String(max + 1).padStart(3, "0")}`;
+}
+
 function Wholesale() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     shop_name: "",
     owner_name: "",
@@ -63,14 +78,15 @@ function Wholesale() {
     },
   });
 
+  // ✅ FIX: Bengali digit normalization
   const filtered = parties.filter((p) => {
-    const s = q.trim();
+    const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
     return (
-      p.shop_name.includes(s) ||
-      p.serial.includes(s) ||
+      p.shop_name.toLowerCase().includes(s) ||
+      p.serial.toLowerCase().includes(s) ||
       (p.mobile ?? "").includes(normalizeMobile(s)) ||
-      (p.owner_name ?? "").includes(s)
+      (p.owner_name ?? "").toLowerCase().includes(s)
     );
   });
 
@@ -79,52 +95,57 @@ function Wholesale() {
       toast.error("দোকানের নাম দিন");
       return;
     }
-    const nums = parties
-      .map((p) => parseInt(p.serial, 10))
-      .filter((n) => !isNaN(n));
-    const next = String((nums.length ? Math.max(...nums) : 0) + 1).padStart(
-      3,
-      "0",
-    );
-    const { error } = await supabase.from("parties").insert({
-      serial: next,
-      kind: "wholesale",
-      shop_name: form.shop_name.trim(),
-      owner_name: form.owner_name.trim() || null,
-      mobile: normalizeMobile(form.mobile) || null,
-      address: form.address.trim() || null,
-    });
-    if (error) {
-      toast.error("সংরক্ষণ হয়নি: " + error.message);
-      return;
+    setBusy(true);
+    try {
+      const next = suggestNextSerial(parties.map((p) => p.serial));
+      const { error } = await supabase.from("parties").insert({
+        serial: next,
+        kind: "wholesale",
+        shop_name: form.shop_name.trim(),
+        owner_name: form.owner_name.trim() || null,
+        mobile: normalizeMobile(form.mobile) || null,
+        address: form.address.trim() || null,
+      });
+      if (error) throw error;
+
+      toast.success(`নতুন পাইকারি কাস্টমার — সিরিয়াল ${next}`);
+      setShowAdd(false);
+      setForm({
+        shop_name: "",
+        owner_name: "",
+        mobile: "",
+        address: "",
+      });
+      qc.invalidateQueries({ queryKey: ["parties", "wholesale"] });
+    } catch (e) {
+      toast.error("যোগ হয়নি: " + (e as Error).message);
+    } finally {
+      setBusy(false);
     }
-    toast.success(
-      `নতুন পাইকারি কাস্টমার যোগ হয়েছে (সিরিয়াল ${toBnDigits(next)})`,
-    );
-    setShowAdd(false);
-    setForm({ shop_name: "", owner_name: "", mobile: "", address: "" });
-    qc.invalidateQueries({ queryKey: ["parties", "wholesale"] });
   }
 
   const totalDue = Object.values(dues).reduce((s, v) => s + v, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-1 md:space-y-6 md:px-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
         <h1
           className="text-2xl md:text-3xl"
           style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
         >
           পাইকারি পাওনা খাতা
         </h1>
-        <Button variant="coffee" onClick={() => setShowAdd(!showAdd)}>
-          <UserPlus /> নতুন কাস্টমার
+        <Button variant="coffee" className="ml-auto" onClick={() => setShowAdd(!showAdd)}>
+          {showAdd ? <X /> : <UserPlus />}
+          {showAdd ? "বাতিল" : "নতুন কাস্টমার"}
         </Button>
       </div>
 
       {showAdd && (
-        <div className="grid gap-3 rounded-2xl border bg-card p-5 shadow-card sm:grid-cols-2">
+        <div className="grid gap-3 rounded-2xl border-2 border-primary/30 bg-card p-5 shadow-card sm:grid-cols-2">
           <input
+            autoFocus
             placeholder="দোকানের নাম *"
             value={form.shop_name}
             onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
@@ -147,10 +168,16 @@ function Wholesale() {
             value={form.address}
             onChange={(e) => setForm({ ...form, address: e.target.value })}
             className="h-10 rounded-md border bg-background px-3"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addParty();
+            }}
           />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            সিরিয়াল: C001, C002, ... (Auto)
+          </p>
           <div className="sm:col-span-2">
-            <Button variant="coffee" onClick={addParty}>
-              সংরক্ষণ করুন
+            <Button variant="coffee" onClick={addParty} disabled={busy}>
+              {busy ? "যোগ হচ্ছে…" : "সংরক্ষণ করুন"}
             </Button>
           </div>
         </div>
@@ -161,7 +188,7 @@ function Wholesale() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="সিরিয়াল / দোকানের নাম / মোবাইল দিয়ে খুঁজুন…"
+          placeholder="সিরিয়াল / দোকানের নাম / মোবাইল…"
           className="h-11 w-full rounded-xl border bg-card pl-10 pr-4 shadow-card"
         />
       </div>
@@ -180,9 +207,7 @@ function Wholesale() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t transition hover:bg-accent/10">
-                  <td className="px-4 py-3 tabular-nums">
-                    {toBnDigits(p.serial)}
-                  </td>
+                  <td className="px-4 py-3 tabular-nums">{toBnDigits(p.serial)}</td>
                   <td className="px-4 py-3">
                     <Link
                       to="/admin/party/$id"
@@ -192,9 +217,7 @@ function Wholesale() {
                       {p.shop_name}
                     </Link>
                     {p.owner_name && (
-                      <span className="block text-xs text-muted-foreground">
-                        {p.owner_name}
-                      </span>
+                      <span className="block text-xs text-muted-foreground">{p.owner_name}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 tabular-nums">
@@ -211,10 +234,7 @@ function Wholesale() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                     কেউ পাওয়া যায়নি
                   </td>
                 </tr>

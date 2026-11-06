@@ -167,15 +167,18 @@ SSL_WIRELESS_SENDER_ID="ALHAMID"
 ## ❓ সমস্যা হলে
 
 **WhatsApp-এ OTP আসছে না:**
+
 - Template approve হয়েছে কিনা দেখুন (Meta Business Manager → Message Templates)
 - Token মেয়াদোত্তীর্ণ কিনা চেক করুন
 - Phone number verified কিনা দেখুন
 
 **SMS আসছে না:**
+
 - Sender ID approve হয়েছে কিনা দেখুন
 - API key সঠিক কিনা verify করুন
 - প্রোভাইডারের dashboard-এ SMS log দেখুন
 
 **Console-এ error দেখছেন:**
+
 - `.env` file-এর মানে extra space আছে কিনা দেখুন
 - Server restart করেছেন কিনা দেখুন (`npm run dev`)

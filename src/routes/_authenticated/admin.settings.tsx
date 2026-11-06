@@ -1,25 +1,15 @@
 // src/routes/_authenticated/admin.settings.tsx
-// দোকানের তথ্য, ছবি, description আপডেট করার পেজ
+// দোকানের তথ্য, ছবি, description আপডেট + Back button + useConfirm
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
-import {
-  Save,
-  Camera,
-  ImagePlus,
-  Trash2,
-  Building2,
-  Info,
-  CheckCircle2,
-  X,
-} from "lucide-react";
+import { Save, Camera, ImagePlus, Trash2, Building2, Info, CheckCircle2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  uploadShopImage,
-  useShopSettings,
-} from "@/hooks/use-shop-settings";
+import { uploadShopImage, useShopSettings } from "@/hooks/use-shop-settings";
 import { toBnDigits } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
@@ -29,24 +19,21 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
 
 function Settings() {
   const qc = useQueryClient();
+  const confirmDialog = useConfirm();
   const { data: settings, isLoading } = useShopSettings();
 
-  // ---- Form state ----
   const [about, setAbout] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // ---- Ref for file inputs ----
   const ownerPhotoRef = useRef<HTMLInputElement>(null);
   const shopPhotoRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
-  // ---- Load into state ----
   useEffect(() => {
     if (settings) setAbout(settings.about ?? "");
   }, [settings]);
 
-  // ---- Save About text ----
   async function saveAbout() {
     setBusy(true);
     const { error } = await supabase
@@ -65,11 +52,7 @@ function Settings() {
     qc.invalidateQueries({ queryKey: ["shop-settings"] });
   }
 
-  // ---- Upload single image ----
-  async function uploadImage(
-    field: "owner_photo_path" | "shop_photo_path",
-    file: File,
-  ) {
+  async function uploadImage(field: "owner_photo_path" | "shop_photo_path", file: File) {
     setBusy(true);
     try {
       const path = await uploadShopImage(file);
@@ -87,9 +70,16 @@ function Settings() {
     }
   }
 
-  // ---- Remove single image ----
   async function removeImage(field: "owner_photo_path" | "shop_photo_path") {
-    if (!confirm("ছবি মুছবেন?")) return;
+    const ok = await confirmDialog({
+      title: "ছবি মুছবেন?",
+      message: "ছবিটি মুছে যাবে। আপনি পরে আবার আপলোড করতে পারবেন।",
+      confirmText: "হ্যাঁ, মুছুন",
+      cancelText: "না",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     setBusy(true);
     const { error } = await supabase
       .from("shop_settings")
@@ -104,13 +94,14 @@ function Settings() {
     qc.invalidateQueries({ queryKey: ["shop-settings"] });
   }
 
-  // ---- Add to gallery ----
   async function addToGallery(files: FileList) {
     setBusy(true);
     try {
       const newPaths: string[] = [];
       for (let i = 0; i < files.length; i++) {
-        const path = await uploadShopImage(files[i]);
+        const file = files[i];
+        if (!file) continue;
+        const path = await uploadShopImage(file);
         newPaths.push(path);
       }
       const currentGallery = settings?.galleryPaths ?? [];
@@ -131,9 +122,16 @@ function Settings() {
     }
   }
 
-  // ---- Remove from gallery ----
   async function removeFromGallery(index: number) {
-    if (!confirm("এই ছবিটা মুছবেন?")) return;
+    const ok = await confirmDialog({
+      title: "গ্যালারির ছবি মুছবেন?",
+      message: "ছবিটি চিরতরে মুছে যাবে।",
+      confirmText: "হ্যাঁ, মুছুন",
+      cancelText: "না",
+      variant: "danger",
+    });
+    if (!ok) return;
+
     const currentGallery = [...(settings?.galleryPaths ?? [])];
     currentGallery.splice(index, 1);
 
@@ -152,17 +150,13 @@ function Settings() {
     qc.invalidateQueries({ queryKey: ["shop-settings"] });
   }
 
-  if (isLoading)
-    return (
-      <p className="p-8 text-center text-muted-foreground">লোড হচ্ছে…</p>
-    );
+  if (isLoading) return <p className="p-8 text-center text-muted-foreground">লোড হচ্ছে…</p>;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-3xl text-primary">
-          সেটিংস
-        </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <h1 className="font-display text-3xl text-primary">সেটিংস</h1>
         {saved && (
           <span className="flex items-center gap-1 rounded-full bg-success/10 px-3 py-1 text-sm text-success">
             <CheckCircle2 className="h-4 w-4" /> সংরক্ষিত
@@ -170,13 +164,10 @@ function Settings() {
         )}
       </div>
 
-      {/* ============ About ============ */}
       <section className="rounded-2xl border bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center gap-2">
           <Info className="h-5 w-5 text-primary" />
-          <h2 className="font-display text-xl text-primary">
-            দোকানের বর্ণনা
-          </h2>
+          <h2 className="font-display text-xl text-primary">দোকানের বর্ণনা</h2>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
           এই লেখাটি হোমপেজে "আমাদের সম্পর্কে" সেকশনে দেখা যাবে।
@@ -185,7 +176,7 @@ function Settings() {
           value={about}
           onChange={(e) => setAbout(e.target.value)}
           rows={4}
-          placeholder="আল হামিদ বস্ত্রালয় — ফেনীর বিশ্বস্ত পাইকারি ও খুচরা কাপড়ের দোকান। আমরা সরাসরি কারখানা থেকে কাপড় আমদানি করি..."
+          placeholder="আল হামিদ বস্ত্রালয় — ফেনীর বিশ্বস্ত পাইকারি ও খুচরা কাপড়ের দোকান..."
           className="w-full rounded-md border bg-background px-3 py-2 text-sm"
         />
         <div className="mt-3 flex justify-end">
@@ -195,22 +186,15 @@ function Settings() {
         </div>
       </section>
 
-      {/* ============ মালিকের ছবি ============ */}
       <section className="rounded-2xl border bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center gap-2">
           <Camera className="h-5 w-5 text-primary" />
-          <h2 className="font-display text-xl text-primary">
-            মালিকের ছবি
-          </h2>
+          <h2 className="font-display text-xl text-primary">মালিকের ছবি</h2>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-accent bg-muted">
             {settings?.ownerPhoto ? (
-              <img
-                src={settings.ownerPhoto}
-                alt="মালিক"
-                className="h-full w-full object-cover"
-              />
+              <img src={settings.ownerPhoto} alt="মালিক" className="h-full w-full object-cover" />
             ) : (
               <Camera className="h-10 w-10 text-muted-foreground" />
             )}
@@ -254,31 +238,21 @@ function Settings() {
         </div>
       </section>
 
-      {/* ============ দোকানের ছবি ============ */}
       <section className="rounded-2xl border bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center gap-2">
           <Building2 className="h-5 w-5 text-primary" />
-          <h2 className="font-display text-xl text-primary">
-            দোকানের মূল ছবি (Hero)
-          </h2>
+          <h2 className="font-display text-xl text-primary">দোকানের মূল ছবি (Hero)</h2>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="flex aspect-video w-full max-w-xs shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-accent bg-muted">
             {settings?.shopPhoto ? (
-              <img
-                src={settings.shopPhoto}
-                alt="দোকান"
-                className="h-full w-full object-cover"
-              />
+              <img src={settings.shopPhoto} alt="দোকান" className="h-full w-full object-cover" />
             ) : (
               <Building2 className="h-10 w-10 text-muted-foreground" />
             )}
           </div>
           <div className="flex flex-1 flex-col gap-2">
-            <p className="text-xs text-muted-foreground">
-              এই ছবিটি হোমপেজের হিরো সেকশনে দেখা যাবে। প্রস্তাবিত:
-              ১৬০০×৯০০ px।
-            </p>
+            <p className="text-xs text-muted-foreground">প্রস্তাবিত: ১৬০০×৯০০ px।</p>
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="coffee"
@@ -314,14 +288,11 @@ function Settings() {
         </div>
       </section>
 
-      {/* ============ গ্যালারি ============ */}
       <section className="rounded-2xl border bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ImagePlus className="h-5 w-5 text-primary" />
-            <h2 className="font-display text-xl text-primary">
-              কাপড়ের গ্যালারি
-            </h2>
+            <h2 className="font-display text-xl text-primary">কাপড়ের গ্যালারি</h2>
           </div>
           <Button
             variant="coffee"
@@ -345,8 +316,7 @@ function Settings() {
         </div>
 
         <p className="mb-3 text-xs text-muted-foreground">
-          একাধিক ছবি একসাথে select করতে পারেন। প্রতিটি ছবির সর্বোচ্চ সাইজ
-          ২MB।
+          একাধিক ছবি একসাথে select করতে পারেন। প্রতিটি ছবির সর্বোচ্চ সাইজ ২MB।
         </p>
 
         {settings?.galleryPaths && settings.galleryPaths.length > 0 ? (
@@ -369,7 +339,7 @@ function Settings() {
                       লোড হচ্ছে
                     </div>
                   )}
-                  <div className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       onClick={() => removeFromGallery(i)}
                       className="flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-lg hover:brightness-110"
@@ -389,22 +359,16 @@ function Settings() {
         ) : (
           <div className="rounded-xl border-2 border-dashed bg-muted/30 py-12 text-center">
             <ImagePlus className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">
-              এখনো কোনো ছবি নেই
-            </p>
-            <p className="text-xs text-muted-foreground">
-              উপরে "ছবি যোগ" বাটনে ক্লিক করুন
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">এখনো কোনো ছবি নেই</p>
+            <p className="text-xs text-muted-foreground">উপরে "ছবি যোগ" বাটনে ক্লিক করুন</p>
           </div>
         )}
       </section>
 
-      {/* Help note */}
       <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm">
         <p className="text-xs text-muted-foreground">
-          <strong>পরামর্শ:</strong> ছবি আপলোডের আগে সাইজ কমিয়ে নিন (মোবাইলে
-          WhatsApp দিয়ে নিজের নাম্বারে পাঠিয়ে save করতে পারেন)। বড় ছবি
-          আপলোড হতে সময় লাগে এবং Supabase-এর free tier-এ দ্রুত ভরে যায়।
+          <strong>পরামর্শ:</strong> ছবি আপলোডের আগে সাইজ কমিয়ে নিন। বড় ছবি আপলোড হতে সময় লাগে এবং
+          Supabase-এর free tier-এ দ্রুত ভরে যায়।
         </p>
       </div>
     </div>

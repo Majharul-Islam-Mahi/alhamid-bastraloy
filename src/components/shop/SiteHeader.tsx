@@ -1,25 +1,30 @@
 // src/components/shop/SiteHeader.tsx
-// পাবলিক হেডার মেনু — desktop + mobile responsive
+// পাবলিক হেডার মেনু — desktop + mobile responsive + Chat icon
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  LogOut,
-  LayoutDashboard,
-  Menu,
-  X,
-  Home,
-  UserCircle,
-} from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { LogOut, LayoutDashboard, Menu, X, Home, UserCircle, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
-import { SHOP } from "@/lib/shop";
+import { SHOP, toBnDigits } from "@/lib/shop";
+import { chatUnreadCount } from "@/lib/chat.functions";
 
 export function SiteHeader() {
   const { data: me } = useMe();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+
+  // Chat unread — logged in users only
+  const fetchChatUnread = useServerFn(chatUnreadCount);
+  const { data: chatData } = useQuery({
+    queryKey: ["chat-unread-count"],
+    queryFn: () => fetchChatUnread(),
+    refetchInterval: 30 * 1000,
+    enabled: !!me,
+  });
+  const chatUnread = chatData?.count ?? 0;
 
   async function logout() {
     await qc.cancelQueries();
@@ -92,6 +97,24 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
+
+          {/* Chat icon — logged in users */}
+          {me && (
+            <Link
+              to="/account/messages"
+              className="relative ml-1 flex h-9 w-9 items-center justify-center rounded-full text-primary-foreground/85 transition-colors hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              title="Messages"
+              aria-label="Messages"
+            >
+              <MessageCircle className="h-5 w-5" />
+              {chatUnread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                  {toBnDigits(chatUnread)}
+                </span>
+              )}
+            </Link>
+          )}
+
           {me && (
             <button onClick={logout} className={link}>
               <LogOut className="mr-1 inline h-4 w-4" /> লগআউট
@@ -100,13 +123,29 @@ export function SiteHeader() {
         </nav>
 
         {/* Mobile toggle */}
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-full p-2 text-primary-foreground hover:bg-primary-foreground/10 md:hidden"
-          aria-label="Menu"
-        >
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          {me && (
+            <Link
+              to="/account/messages"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-primary-foreground hover:bg-primary-foreground/10"
+              aria-label="Messages"
+            >
+              <MessageCircle className="h-5 w-5" />
+              {chatUnread > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                  {toBnDigits(chatUnread)}
+                </span>
+              )}
+            </Link>
+          )}
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-full p-2 text-primary-foreground hover:bg-primary-foreground/10"
+            aria-label="Menu"
+          >
+            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer */}
@@ -114,16 +153,24 @@ export function SiteHeader() {
         <div className="border-t border-primary-foreground/10 bg-sidebar p-3 md:hidden">
           <nav className="space-y-1">
             {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setOpen(false)}
-                className={mobileLink}
-              >
+              <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className={mobileLink}>
                 <span className="mr-2 inline-flex align-middle">{l.icon}</span>
                 {l.label}
               </Link>
             ))}
+
+            {me && (
+              <Link to="/account/messages" onClick={() => setOpen(false)} className={mobileLink}>
+                <MessageCircle className="mr-2 inline h-4 w-4 align-middle" />
+                Messages
+                {chatUnread > 0 && (
+                  <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                    {toBnDigits(chatUnread)}
+                  </span>
+                )}
+              </Link>
+            )}
+
             {me && (
               <>
                 <div className="border-t border-sidebar-border pt-2 mt-2">
@@ -131,10 +178,7 @@ export function SiteHeader() {
                     {me.full_name} · {me.mobile}
                   </p>
                 </div>
-                <button
-                  onClick={logout}
-                  className={mobileLink + " w-full text-left"}
-                >
+                <button onClick={logout} className={mobileLink + " w-full text-left"}>
                   <LogOut className="mr-2 inline h-4 w-4" />
                   লগআউট
                 </button>

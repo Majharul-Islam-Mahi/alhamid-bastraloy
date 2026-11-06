@@ -1,5 +1,5 @@
 // src/routes/login.forgot.tsx
-// পাসওয়ার্ড ভুলে গেলে — OTP দিয়ে reset
+// পাসওয়ার্ড ভুলে গেলে — OTP দিয়ে reset (premium design)
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -12,14 +12,12 @@ import {
   Info,
   MessageCircle,
   Phone,
+  Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import {
-  requestPasswordReset,
-  resetPasswordWithOtp,
-} from "@/lib/password-reset.functions";
+import { requestPasswordReset, resetPasswordWithOtp } from "@/lib/password-reset.functions";
 import { SHOP } from "@/lib/shop";
 
 export const Route = createFileRoute("/login/forgot")({
@@ -100,31 +98,110 @@ function ForgotPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-background px-3 py-6 sm:px-4 sm:py-10">
       <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <p className="font-display text-sm text-accent-foreground/70">
-            {SHOP.bismillah}
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-primary">
-            পাসওয়ার্ড রিসেট
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            মোবাইল নাম্বার দিয়ে নতুন পাসওয়ার্ড সেট করুন
-          </p>
+        {/* ============ Hero Card ============ */}
+        <div
+          className="relative mb-5 overflow-hidden rounded-2xl p-6 text-center shadow-soft md:p-8"
+          style={{
+            background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
+          }}
+        >
+          {/* weave pattern */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 8px), repeating-linear-gradient(-45deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 8px)",
+            }}
+          />
+
+          <div className="relative">
+            {/* Icon circle */}
+            <div
+              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full shadow-lg md:h-18 md:w-18"
+              style={{
+                background: "linear-gradient(135deg, #d9a85a 0%, #b57f38 100%)",
+                color: "#2e1c12",
+              }}
+            >
+              <Lock className="h-7 w-7 md:h-8 md:w-8" />
+            </div>
+
+            <p
+              className="mt-4 text-sm md:text-base"
+              style={{
+                fontFamily: "'Tiro Bangla', serif",
+                color: "#d9a85a",
+              }}
+            >
+              {SHOP.bismillah}
+            </p>
+
+            <h1
+              className="mt-2 text-2xl leading-tight md:text-3xl"
+              style={{
+                fontFamily: "'Tiro Bangla', serif",
+                color: "#f8f3ea",
+              }}
+            >
+              পাসওয়ার্ড রিসেট
+            </h1>
+
+            <p className="mt-1 text-xs text-[#c9b89a] md:text-sm">
+              {step === 1
+                ? "মোবাইল নাম্বার দিয়ে নতুন পাসওয়ার্ড সেট করুন"
+                : "OTP যাচাই করে নতুন পাসওয়ার্ড দিন"}
+            </p>
+
+            {/* Step indicator */}
+            <div
+              className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold"
+              style={{
+                backgroundColor: "rgba(201,146,74,0.25)",
+                color: "#f8f3ea",
+              }}
+            >
+              <span
+                className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
+                style={{
+                  backgroundColor: "#d9a85a",
+                  color: "#2e1c12",
+                }}
+              >
+                ১
+              </span>
+              <span className="h-px w-6 bg-white/30" />
+              <span
+                className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
+                style={{
+                  backgroundColor: step === 2 ? "#d9a85a" : "rgba(255,255,255,0.2)",
+                  color: step === 2 ? "#2e1c12" : "#f8f3ea",
+                }}
+              >
+                ২
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded-2xl border-2 border-primary/15 bg-card p-6 shadow-soft md:p-8">
+        {/* ============ Form Card ============ */}
+        <div className="rounded-2xl border-2 border-primary/15 bg-card p-5 shadow-soft md:p-7">
           {step === 1 ? (
             <form onSubmit={step1} className="space-y-5">
-              <div className="rounded-lg bg-accent/10 p-3 text-xs text-accent-foreground">
-                <Info className="mr-1 inline h-3.5 w-3.5" />
-                আপনার অ্যাকাউন্টের মোবাইল নাম্বার দিন। সেখানে একটি OTP কোড
-                পাঠানো হবে।
+              {/* Info box */}
+              <div className="rounded-xl border-l-4 border-accent bg-accent/5 p-3 text-xs md:text-sm">
+                <Info className="mr-1 inline h-3.5 w-3.5 text-accent" />
+                <span style={{ color: "#3a2318" }}>
+                  আপনার অ্যাকাউন্টে যেই মোবাইল নাম্বার আছে সেটা দিন। সেখানে একটি OTP কোড পাঠানো হবে।
+                </span>
               </div>
 
+              {/* Mobile input */}
               <div className="space-y-1.5">
-                <Label htmlFor="mobile">মোবাইল নাম্বার</Label>
+                <Label htmlFor="mobile" className="text-sm font-semibold text-primary/90">
+                  মোবাইল নাম্বার
+                </Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <Smartphone className="h-4 w-4" />
@@ -135,7 +212,7 @@ function ForgotPage() {
                     placeholder="01XXXXXXXXX"
                     value={mobile}
                     onChange={(e) => setMobile(e.target.value)}
-                    className="h-11 pl-9"
+                    className="h-11 pl-10"
                     required
                     autoFocus
                   />
@@ -146,24 +223,24 @@ function ForgotPage() {
                 type="submit"
                 variant="coffee"
                 size="lg"
-                className="w-full"
+                className="w-full shadow-soft"
                 disabled={busy}
               >
-                OTP পাঠান
+                {busy ? "পাঠানো হচ্ছে…" : "OTP পাঠান"}
               </Button>
 
               <Link
                 to="/login/customer"
-                className="block text-center text-sm text-muted-foreground underline hover:text-primary"
+                className="flex items-center justify-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
               >
-                <ArrowLeft className="mr-1 inline h-3.5 w-3.5" />
+                <ArrowLeft className="h-3.5 w-3.5" />
                 লগইনে ফিরুন
               </Link>
             </form>
           ) : (
             <form onSubmit={step2} className="space-y-5">
-              {/* OTP চ্যানেল বার্তা */}
-              <div className="rounded-xl border-2 border-accent/40 bg-gradient-to-br from-accent/10 to-accent/5 p-4 text-center">
+              {/* OTP info */}
+              <div className="rounded-xl border-2 border-accent/40 bg-linear-to-br from-accent/10 to-accent/5 p-4 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/20 text-primary">
                   {challenge?.channel === "whatsapp" ? (
                     <MessageCircle className="h-5 w-5" />
@@ -173,7 +250,7 @@ function ForgotPage() {
                     <Phone className="h-5 w-5" />
                   )}
                 </div>
-                <p className="mt-2 text-sm font-medium text-primary">
+                <p className="mt-2 text-sm font-semibold text-primary">
                   {challenge?.isDemo
                     ? "পরীক্ষামূলক মোড — কোড নিচে"
                     : "আপনার মোবাইলে OTP পাঠানো হয়েছে"}
@@ -194,22 +271,28 @@ function ForgotPage() {
                 )}
               </div>
 
+              {/* OTP code */}
               <div className="space-y-1.5">
-                <Label htmlFor="otp">৬ সংখ্যার OTP কোড</Label>
+                <Label htmlFor="otp" className="text-sm font-semibold text-primary/90">
+                  ৬ সংখ্যার OTP কোড
+                </Label>
                 <Input
                   id="otp"
                   inputMode="numeric"
                   maxLength={6}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  className="h-12 text-center font-mono text-xl tracking-[0.4em]"
+                  className="h-14 text-center font-mono text-2xl tracking-[0.4em]"
                   required
                   autoFocus
                 />
               </div>
 
+              {/* New password */}
               <div className="space-y-1.5">
-                <Label htmlFor="newPw">নতুন পাসওয়ার্ড (৬+ অক্ষর)</Label>
+                <Label htmlFor="newPw" className="text-sm font-semibold text-primary/90">
+                  নতুন পাসওয়ার্ড (৬+ অক্ষর)
+                </Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <KeyRound className="h-4 w-4" />
@@ -220,14 +303,17 @@ function ForgotPage() {
                     placeholder="••••••"
                     value={newPw}
                     onChange={(e) => setNewPw(e.target.value)}
-                    className="h-11 pl-9"
+                    className="h-11 pl-10"
                     required
                   />
                 </div>
               </div>
 
+              {/* Confirm password */}
               <div className="space-y-1.5">
-                <Label htmlFor="confirmPw">আবার নতুন পাসওয়ার্ড</Label>
+                <Label htmlFor="confirmPw" className="text-sm font-semibold text-primary/90">
+                  আবার নতুন পাসওয়ার্ড
+                </Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <KeyRound className="h-4 w-4" />
@@ -238,20 +324,24 @@ function ForgotPage() {
                     placeholder="••••••"
                     value={confirmPw}
                     onChange={(e) => setConfirmPw(e.target.value)}
-                    className="h-11 pl-9"
+                    className="h-11 pl-10"
                     required
                   />
                 </div>
+                {confirmPw && newPw !== confirmPw && (
+                  <p className="text-xs text-destructive">⚠️ দুই পাসওয়ার্ড মিলছে না</p>
+                )}
               </div>
 
               <Button
                 type="submit"
                 variant="coffee"
                 size="lg"
-                className="w-full"
-                disabled={busy || code.length !== 6}
+                className="w-full shadow-soft"
+                disabled={busy || code.length !== 6 || newPw.length < 6}
               >
-                <ShieldCheck /> পাসওয়ার্ড পরিবর্তন করুন
+                <ShieldCheck />
+                {busy ? "পরিবর্তন হচ্ছে…" : "পাসওয়ার্ড পরিবর্তন করুন"}
               </Button>
 
               <button
@@ -262,16 +352,18 @@ function ForgotPage() {
                   setNewPw("");
                   setConfirmPw("");
                 }}
-                className="w-full text-center text-sm text-muted-foreground underline hover:text-primary"
+                className="w-full text-center text-sm text-muted-foreground underline decoration-primary/40 underline-offset-4 hover:text-primary"
               >
-                আবার শুরু করুন
+                ← আবার শুরু করুন
               </button>
             </form>
           )}
         </div>
 
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          সমস্যা হলে ম্যানেজারকে কল করুন: {SHOP.managerPhone}
+        {/* ============ Footer ============ */}
+        <p className="mt-4 text-center text-xs text-muted-foreground md:text-sm">
+          সমস্যা হলে ম্যানেজারকে কল করুন:{" "}
+          <span className="font-semibold text-primary">{SHOP.managerPhone}</span>
         </p>
       </div>
     </div>

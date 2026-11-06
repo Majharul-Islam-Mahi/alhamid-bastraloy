@@ -1,11 +1,12 @@
 // src/routes/_authenticated/admin.areas.tsx
-// এলাকা ব্যবস্থাপনা — কোন দিন কোন এলাকায় কালেকশন
+// এলাকা ব্যবস্থাপনা — কোন দিন কোন এলাকায় কালেকশন + Back button
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { MapPin, Plus, Trash2, Save, Pencil, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toBnDigits } from "@/lib/shop";
+import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { toast } from "sonner";
@@ -25,15 +26,7 @@ type Area = {
   sort_order: number;
 };
 
-const DAYS = [
-  "রবিবার",
-  "সোমবার",
-  "মঙ্গলবার",
-  "বুধবার",
-  "বৃহস্পতিবার",
-  "শুক্রবার",
-  "শনিবার",
-];
+const DAYS = ["রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার", "শনিবার"];
 
 function AreasPage() {
   const qc = useQueryClient();
@@ -50,13 +43,8 @@ function AreasPage() {
   const { data: areas = [] } = useQuery({
     queryKey: ["areas"],
     queryFn: async () =>
-      ((
-        await supabase
-          .from("areas")
-          .select("*")
-          .order("day_of_week")
-          .order("sort_order")
-      ).data ?? []) as Area[],
+      ((await supabase.from("areas").select("*").order("day_of_week").order("sort_order")).data ??
+        []) as Area[],
   });
 
   async function addArea() {
@@ -69,8 +57,7 @@ function AreasPage() {
       name_bn: form.name_bn.trim() || null,
       day_of_week: form.day_of_week,
       description: form.description.trim() || null,
-      sort_order:
-        areas.filter((a) => a.day_of_week === form.day_of_week).length + 1,
+      sort_order: areas.filter((a) => a.day_of_week === form.day_of_week).length + 1,
     });
     if (error) {
       toast.error("যোগ হয়নি: " + error.message);
@@ -129,7 +116,9 @@ function AreasPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-1 md:space-y-6 md:px-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Header with Back */}
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
         <div className="flex items-center gap-2">
           <MapPin className="h-6 w-6 md:h-7 md:w-7" style={{ color: "#4a2f1e" }} />
           <h1
@@ -139,7 +128,7 @@ function AreasPage() {
             এলাকা ব্যবস্থাপনা
           </h1>
         </div>
-        <Button variant="coffee" onClick={() => setShowAdd(!showAdd)}>
+        <Button variant="coffee" className="ml-auto" onClick={() => setShowAdd(!showAdd)}>
           <Plus /> নতুন এলাকা
         </Button>
       </div>
@@ -147,9 +136,7 @@ function AreasPage() {
       {showAdd && (
         <div className="grid gap-3 rounded-2xl border bg-card p-5 shadow-card sm:grid-cols-2">
           <label className="text-sm">
-            <span className="text-xs text-muted-foreground">
-              নাম (English)
-            </span>
+            <span className="text-xs text-muted-foreground">নাম (English)</span>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -158,9 +145,7 @@ function AreasPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="text-xs text-muted-foreground">
-              নাম (বাংলা)
-            </span>
+            <span className="text-xs text-muted-foreground">নাম (বাংলা)</span>
             <input
               value={form.name_bn}
               onChange={(e) => setForm({ ...form, name_bn: e.target.value })}
@@ -169,14 +154,10 @@ function AreasPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="text-xs text-muted-foreground">
-              কালেকশনের দিন
-            </span>
+            <span className="text-xs text-muted-foreground">কালেকশনের দিন</span>
             <select
               value={form.day_of_week}
-              onChange={(e) =>
-                setForm({ ...form, day_of_week: Number(e.target.value) })
-              }
+              onChange={(e) => setForm({ ...form, day_of_week: Number(e.target.value) })}
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
             >
               {DAYS.map((d, i) => (
@@ -187,14 +168,10 @@ function AreasPage() {
             </select>
           </label>
           <label className="text-sm">
-            <span className="text-xs text-muted-foreground">
-              বর্ণনা (ঐচ্ছিক)
-            </span>
+            <span className="text-xs text-muted-foreground">বর্ণনা (ঐচ্ছিক)</span>
             <input
               value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="mt-1 block h-10 w-full rounded-md border bg-background px-3"
             />
           </label>
@@ -237,18 +214,14 @@ function AreasPage() {
                         />
                         <input
                           defaultValue={a.name_bn ?? ""}
-                          onChange={(e) =>
-                            (a.name_bn = e.target.value || null)
-                          }
+                          onChange={(e) => (a.name_bn = e.target.value || null)}
                           className="h-9 rounded border bg-background px-2 text-sm"
                           placeholder="বাংলা নাম"
                         />
                       </div>
                       <select
                         defaultValue={a.day_of_week}
-                        onChange={(e) =>
-                          (a.day_of_week = Number(e.target.value))
-                        }
+                        onChange={(e) => (a.day_of_week = Number(e.target.value))}
                         className="h-9 rounded border bg-background px-2 text-sm"
                       >
                         {DAYS.map((d, i) => (
@@ -264,10 +237,7 @@ function AreasPage() {
                         >
                           <Save className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => setEditId(null)}
-                          className="rounded bg-muted p-2"
-                        >
+                        <button onClick={() => setEditId(null)} className="rounded bg-muted p-2">
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -275,15 +245,9 @@ function AreasPage() {
                   ) : (
                     <>
                       <div className="min-w-0">
-                        <p
-                          className="font-semibold"
-                          style={{ color: "#3a2318" }}
-                        >
+                        <p className="font-semibold" style={{ color: "#3a2318" }}>
                           {a.name_bn || a.name}
-                          <span
-                            className="ml-2 text-xs"
-                            style={{ color: "#7a6558" }}
-                          >
+                          <span className="ml-2 text-xs" style={{ color: "#7a6558" }}>
                             ({a.name})
                           </span>
                         </p>
@@ -295,9 +259,7 @@ function AreasPage() {
                       </div>
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                          a.active
-                            ? "bg-success/10 text-success"
-                            : "bg-muted text-muted-foreground"
+                          a.active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {a.active ? "✅ চালু" : "⏸ বন্ধ"}

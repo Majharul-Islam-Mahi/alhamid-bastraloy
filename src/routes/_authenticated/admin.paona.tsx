@@ -1,12 +1,16 @@
 // src/routes/_authenticated/admin.paona.tsx
 // খুচরা পাওনা খাতা — খুচরা কাস্টমারদের বাকির তালিকা
+// [FIXED] Bengali digit search, better form UX, R001 serial maintained
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Search, ReceiptText } from "lucide-react";
+import { Search, ReceiptText, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { taka, toBnDigits, normalizeMobile } from "@/lib/shop";
+import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
 import { partyDue } from "@/lib/ledger";
+import { BackButton } from "@/components/shop/BackButton";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/paona")({
   head: () => ({
@@ -21,10 +25,20 @@ type Party = {
   shop_name: string;
   owner_name: string | null;
   mobile: string | null;
+  address: string | null;
 };
 
 function Paona() {
+  const qc = useQueryClient();
   const [q, setQ] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    shop_name: "",
+    owner_name: "",
+    mobile: "",
+    address: "",
+  });
 
   const { data: parties = [] } = useQuery({
     queryKey: ["parties", "retail"],
@@ -32,14 +46,14 @@ function Paona() {
       ((
         await supabase
           .from("parties")
-          .select("id,serial,shop_name,owner_name,mobile")
+          .select("id,serial,shop_name,owner_name,mobile,address")
           .eq("kind", "retail")
           .order("serial")
       ).data ?? []) as Party[],
   });
 
   const { data: dues = {} } = useQuery({
-    queryKey: ["party-dues", parties.map((p) => p.id).join(",")],
+    queryKey: ["party-dues-retail", parties.map((p) => p.id).join(",")],
     enabled: parties.length > 0,
     queryFn: async () => {
       const out: Record<string, number> = {};
@@ -52,30 +66,123 @@ function Paona() {
     },
   });
 
+  // ✅ FIX: Bengali digit normalization
   const filtered = parties.filter((p) => {
-    const s = q.trim();
+    const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
     return (
-      p.shop_name.includes(s) ||
-      p.serial.includes(s) ||
+      p.shop_name.toLowerCase().includes(s) ||
+      p.serial.toLowerCase().includes(s) ||
       (p.mobile ?? "").includes(normalizeMobile(s)) ||
-      (p.owner_name ?? "").includes(s)
+      (p.owner_name ?? "").toLowerCase().includes(s)
     );
   });
 
-  const totalDue = filtered.reduce(
-    (s, p) => s + Math.max(0, dues[p.id] ?? 0),
-    0,
-  );
+  // Retail serial: R001, R002 ...
+  function suggestNextRetailSerial(existing: string[]): string {
+    const nums = existing
+      .map((s) => {
+        const m = s.match(/^R(\d+)$/i);
+        return m && m[1] ? parseInt(m[1], 10) : 0;
+      })
+      .filter((n) => !isNaN(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    return `R${String(max + 1).padStart(3, "0")}`;
+  }
+
+  async function addRetailCustomer() {
+    if (!form.shop_name.trim()) {
+      toast.error("নাম দিন");
+      return;
+    }
+    setBusy(true);
+    try {
+      const nextSerial = suggestNextRetailSerial(parties.map((p) => p.serial));
+      const { error } = await supabase.from("parties").insert({
+        kind: "retail",
+        serial: nextSerial,
+        shop_name: form.shop_name.trim(),
+        owner_name: form.owner_name.trim() || null,
+        mobile: normalizeMobile(form.mobile) || null,
+        address: form.address.trim() || null,
+      });
+      if (error) throw error;
+
+      toast.success(`খুচরা কাস্টমার যোগ হয়েছে — সিরিয়াল ${nextSerial}`);
+      setForm({
+        shop_name: "",
+        owner_name: "",
+        mobile: "",
+        address: "",
+      });
+      setShowAdd(false);
+      qc.invalidateQueries({ queryKey: ["parties", "retail"] });
+    } catch (e) {
+      toast.error("যোগ হয়নি: " + (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const totalDue = filtered.reduce((s, p) => s + Math.max(0, dues[p.id] ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-1 md:space-y-6 md:px-0">
-      <h1
-        className="text-2xl md:text-3xl"
-        style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
-      >
-        খুচরা পাওনা খাতা
-      </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <BackButton fallback="/admin" />
+        <h1
+          className="text-2xl md:text-3xl"
+          style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
+        >
+          খুচরা পাওনা খাতা
+        </h1>
+        <Button variant="coffee" className="ml-auto" onClick={() => setShowAdd(!showAdd)}>
+          {showAdd ? <X /> : <UserPlus />}
+          {showAdd ? "বাতিল" : "নতুন খুচরা কাস্টমার"}
+        </Button>
+      </div>
+
+      {showAdd && (
+        <div className="grid gap-3 rounded-2xl border-2 border-primary/30 bg-card p-5 shadow-card sm:grid-cols-2">
+          <input
+            autoFocus
+            placeholder="নাম *"
+            value={form.shop_name}
+            onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
+            className="h-10 rounded-md border bg-background px-3"
+          />
+          <input
+            placeholder="পুরো নাম / বাবার নাম"
+            value={form.owner_name}
+            onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+            className="h-10 rounded-md border bg-background px-3"
+          />
+          <input
+            placeholder="মোবাইল"
+            value={form.mobile}
+            onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+            inputMode="tel"
+            className="h-10 rounded-md border bg-background px-3"
+          />
+          <input
+            placeholder="ঠিকানা"
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            className="h-10 rounded-md border bg-background px-3"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addRetailCustomer();
+            }}
+          />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            সিরিয়াল auto: R001, R002, R003 ... (login ID নেই, শুধু tracking)
+          </p>
+          <div className="sm:col-span-2">
+            <Button variant="coffee" onClick={addRetailCustomer} disabled={busy}>
+              {busy ? "যোগ হচ্ছে…" : "সংরক্ষণ করুন"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -101,9 +208,7 @@ function Paona() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t transition hover:bg-accent/10">
-                  <td className="px-4 py-3 tabular-nums">
-                    {toBnDigits(p.serial)}
-                  </td>
+                  <td className="px-4 py-3 tabular-nums">{toBnDigits(p.serial)}</td>
                   <td className="px-4 py-3">
                     <Link
                       to="/admin/party/$id"
@@ -113,9 +218,7 @@ function Paona() {
                       {p.shop_name}
                     </Link>
                     {p.owner_name && (
-                      <span className="block text-xs text-muted-foreground">
-                        {p.owner_name}
-                      </span>
+                      <span className="block text-xs text-muted-foreground">{p.owner_name}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 tabular-nums">
@@ -132,10 +235,7 @@ function Paona() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-10 text-center text-muted-foreground"
-                  >
+                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
                     কেউ পাওয়া যায়নি
                   </td>
                 </tr>

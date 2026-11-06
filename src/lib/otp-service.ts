@@ -8,12 +8,7 @@
 //   OTP_CHANNEL="sms_ssl"     → SSL Wireless (বাংলাদেশ)
 //   OTP_CHANNEL="sms_bulkbd"  → Bulk SMS BD (বাংলাদেশ)
 
-export type OtpChannel =
-  | "demo"
-  | "console"
-  | "whatsapp"
-  | "sms_ssl"
-  | "sms_bulkbd";
+export type OtpChannel = "demo" | "console" | "whatsapp" | "sms_ssl" | "sms_bulkbd";
 
 export type OtpSendResult = {
   ok: boolean;
@@ -31,10 +26,7 @@ export function currentChannel(): OtpChannel {
  * একটি mobile নাম্বারে OTP পাঠায়।
  * মোবাইল নাম্বার already normalized (digits only, e.g. "01716782247")।
  */
-export async function sendOtp(
-  mobile: string,
-  code: string,
-): Promise<OtpSendResult> {
+export async function sendOtp(mobile: string, code: string): Promise<OtpSendResult> {
   const channel = currentChannel();
 
   switch (channel) {
@@ -62,10 +54,7 @@ export async function sendOtp(
 }
 
 // ---------- WhatsApp Cloud API (Meta) ----------
-async function sendViaWhatsApp(
-  mobile: string,
-  code: string,
-): Promise<OtpSendResult> {
+async function sendViaWhatsApp(mobile: string, code: string): Promise<OtpSendResult> {
   const token = process.env["WHATSAPP_TOKEN"];
   const phoneId = process.env["WHATSAPP_PHONE_ID"];
 
@@ -81,31 +70,28 @@ async function sendViaWhatsApp(
   const to = mobile.startsWith("88") ? mobile : `88${mobile}`;
 
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v20.0/${phoneId}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to,
-          type: "template",
-          template: {
-            name: "otp_verification", // Meta-তে আগেই template বানাতে হবে
-            language: { code: "bn" },
-            components: [
-              {
-                type: "body",
-                parameters: [{ type: "text", text: code }],
-              },
-            ],
-          },
-        }),
+    const res = await fetch(`https://graph.facebook.com/v20.0/${phoneId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: "otp_verification", // Meta-তে আগেই template বানাতে হবে
+          language: { code: "bn" },
+          components: [
+            {
+              type: "body",
+              parameters: [{ type: "text", text: code }],
+            },
+          ],
+        },
+      }),
+    });
 
     if (!res.ok) {
       const body = await res.text();
@@ -123,10 +109,7 @@ async function sendViaWhatsApp(
 }
 
 // ---------- SSL Wireless (বাংলাদেশ) ----------
-async function sendViaSslWireless(
-  mobile: string,
-  code: string,
-): Promise<OtpSendResult> {
+async function sendViaSslWireless(mobile: string, code: string): Promise<OtpSendResult> {
   const apiKey = process.env["SSL_WIRELESS_API_KEY"];
   const sid = process.env["SSL_WIRELESS_SID"];
   const senderId = process.env["SSL_WIRELESS_SENDER_ID"] ?? "ALHAMID";
@@ -160,10 +143,7 @@ async function sendViaSslWireless(
 }
 
 // ---------- Bulk SMS BD ----------
-async function sendViaBulkSmsBd(
-  mobile: string,
-  code: string,
-): Promise<OtpSendResult> {
+async function sendViaBulkSmsBd(mobile: string, code: string): Promise<OtpSendResult> {
   const apiKey = process.env["BULKSMSBD_API_KEY"];
   const senderId = process.env["BULKSMSBD_SENDER_ID"] ?? "ALHAMID";
 
