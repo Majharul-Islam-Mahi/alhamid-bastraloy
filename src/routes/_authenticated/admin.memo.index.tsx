@@ -1,9 +1,12 @@
 // src/routes/_authenticated/admin.memo.index.tsx
 // মেমো বই — বাম পাশে পাইকারি history, ডান পাশে খুচরা history
+//
+// 🐛 FIX: Quick Print/Open buttons on hover (list এ থেকেই)
+// 🐛 FIX: Better pending memo visibility
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Search, BookOpen, FileText, Store, Users, X } from "lucide-react";
+import { Plus, Search, BookOpen, FileText, Store, Users, X, Printer, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, toBnDigits, englishDateBn } from "@/lib/shop";
 import { BackButton } from "@/components/shop/BackButton";
@@ -33,22 +36,18 @@ function MemoListSplit() {
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileTab, setMobileTab] = useState<"wholesale" | "retail">("wholesale");
 
-  // All confirmed/draft memos
   const { data: allMemos = [] } = useQuery({
     queryKey: ["memos-split-view"],
     queryFn: async () =>
       ((
         await supabase
           .from("memos")
-          .select(
-            "id,memo_no,memo_date,memo_type,shop_name,owner_name,mobile,party_serial,total,paid,status,created_at",
-          )
+          .select("id,memo_no,memo_date,memo_type,shop_name,owner_name,mobile,party_serial,total,paid,status,created_at")
           .order("created_at", { ascending: false })
           .limit(500)
       ).data ?? []) as MemoRow[],
   });
 
-  // Filter by search
   const filtered = allMemos.filter((m) => {
     const s = searchQuery.trim().toLowerCase();
     if (!s) return true;
@@ -61,23 +60,23 @@ function MemoListSplit() {
     );
   });
 
-  // Split into wholesale vs retail
-  const wholesaleMemos = filtered.filter(
-    (m) => m.memo_type === "wholesale" || m.memo_type === null,
-  );
-  const retailMemos = filtered.filter(
-    (m) => m.memo_type === "retail_serial" || m.memo_type === "retail_manual",
-  );
+  const wholesaleMemos = filtered.filter((m) => m.memo_type === "wholesale" || m.memo_type === null);
+  const retailMemos = filtered.filter((m) => m.memo_type === "retail_serial" || m.memo_type === "retail_manual");
+
+  const totalPending = filtered.filter((m) => m.status === "draft").length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 md:space-y-5">
-      {/* Header */}
       <div className="no-print flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin" />
         <h1 className="font-display text-2xl text-primary md:text-3xl">মেমো বই</h1>
+        {totalPending > 0 && (
+          <span className="rounded-full bg-yellow-500 px-3 py-1 text-xs font-bold text-white">
+            ⏳ {toBnDigits(totalPending)} পেন্ডিং
+          </span>
+        )}
       </div>
 
-      {/* New Memo buttons */}
       <div className="no-print flex flex-wrap gap-2">
         <Link to="/admin/memo/new" className="flex-1 sm:flex-initial">
           <Button variant="coffee" className="w-full">
@@ -86,7 +85,6 @@ function MemoListSplit() {
         </Link>
       </div>
 
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -99,22 +97,18 @@ function MemoListSplit() {
           <button
             onClick={() => setSearchQuery("")}
             className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"
-            title="ক্লিয়ার"
           >
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Mobile Tabs — only visible on small screens */}
       <div className="md:hidden">
         <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
           <button
             onClick={() => setMobileTab("wholesale")}
             className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              mobileTab === "wholesale"
-                ? "bg-primary text-primary-foreground shadow"
-                : "text-foreground"
+              mobileTab === "wholesale" ? "bg-primary text-primary-foreground shadow" : "text-foreground"
             }`}
           >
             <Store className="h-4 w-4" />
@@ -123,9 +117,7 @@ function MemoListSplit() {
           <button
             onClick={() => setMobileTab("retail")}
             className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              mobileTab === "retail"
-                ? "bg-primary text-primary-foreground shadow"
-                : "text-foreground"
+              mobileTab === "retail" ? "bg-primary text-primary-foreground shadow" : "text-foreground"
             }`}
           >
             <Users className="h-4 w-4" />
@@ -134,9 +126,7 @@ function MemoListSplit() {
         </div>
       </div>
 
-      {/* ============ Split View — 2 columns on desktop, tabs on mobile ============ */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* ========== LEFT: পাইকারি ========== */}
         <div className={`${mobileTab === "wholesale" ? "block" : "hidden md:block"}`}>
           <MemoColumn
             title="পাইকারি মেমো"
@@ -145,8 +135,6 @@ function MemoListSplit() {
             tone="coffee"
           />
         </div>
-
-        {/* ========== RIGHT: খুচরা ========== */}
         <div className={`${mobileTab === "retail" ? "block" : "hidden md:block"}`}>
           <MemoColumn
             title="খুচরা মেমো"
@@ -157,7 +145,6 @@ function MemoListSplit() {
         </div>
       </div>
 
-      {/* Summary */}
       <p className="text-center text-xs" style={{ color: "#7a6558" }}>
         মোট {toBnDigits(filtered.length)} মেমো · পাইকারি {toBnDigits(wholesaleMemos.length)} · খুচরা{" "}
         {toBnDigits(retailMemos.length)}
@@ -166,9 +153,6 @@ function MemoListSplit() {
   );
 }
 
-// ============================================================
-// Reusable column
-// ============================================================
 function MemoColumn({
   title,
   icon,
@@ -187,19 +171,11 @@ function MemoColumn({
     tone === "coffee"
       ? "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)"
       : "linear-gradient(135deg, #c9924a 0%, #b57f38 100%)";
-
   const headerText = tone === "coffee" ? "#f8f3ea" : "#2e1c12";
 
   return (
-    <div
-      className="overflow-hidden rounded-2xl border bg-card shadow-card"
-      style={{ borderColor: "#dbcbb2" }}
-    >
-      {/* Column header */}
-      <div
-        className="flex items-center gap-2 px-4 py-3"
-        style={{ background: headerBg, color: headerText }}
-      >
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-card" style={{ borderColor: "#dbcbb2" }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{ background: headerBg, color: headerText }}>
         <span style={{ color: headerText }}>{icon}</span>
         <h2 className="flex-1 text-lg font-semibold" style={{ fontFamily: "'Tiro Bangla', serif" }}>
           {title}
@@ -215,9 +191,7 @@ function MemoColumn({
         </span>
       </div>
 
-      {/* Scrollable content */}
       <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
-        {/* Pending section */}
         {pendingMemos.length > 0 && (
           <div className="border-b-2 border-yellow-500/40 bg-yellow-50/40 p-3">
             <div className="mb-2 flex items-center gap-1.5">
@@ -234,11 +208,13 @@ function MemoColumn({
           </div>
         )}
 
-        {/* Confirmed section */}
         {doneMemos.length === 0 && pendingMemos.length === 0 ? (
           <div className="py-16 text-center">
             <BookOpen className="mx-auto h-8 w-8 opacity-30" />
             <p className="mt-2 text-sm text-muted-foreground">কোনো মেমো নেই</p>
+            <Link to="/admin/memo/new" className="mt-2 inline-block text-xs text-primary underline">
+              নতুন মেমো তৈরি করুন →
+            </Link>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -252,59 +228,78 @@ function MemoColumn({
   );
 }
 
-// ============================================================
-// Single memo row
-// ============================================================
 function MemoRowItem({ memo: m }: { memo: MemoRow }) {
   const due = Number(m.total) - Number(m.paid);
   const isDraft = m.status === "draft";
   const isVoid = m.status === "void";
 
   return (
-    <Link
-      to="/admin/memo/$id"
-      params={{ id: m.id }}
-      className={`flex items-center gap-3 px-3 py-2.5 transition hover:bg-accent/10 ${
+    <div
+      className={`group flex items-center gap-2 px-3 py-2.5 transition hover:bg-accent/10 ${
         isVoid ? "opacity-60" : ""
       }`}
     >
-      {/* Memo no badge */}
-      <div
-        className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[10px] font-bold ${
-          isDraft
-            ? "bg-yellow-500/15 text-yellow-700"
-            : isVoid
-              ? "bg-destructive/10 text-destructive"
-              : "bg-primary/10 text-primary"
-        }`}
+      <Link
+        to="/admin/memo/$id"
+        params={{ id: m.id }}
+        className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <span className="text-[8px] uppercase">M</span>
-        <span className="text-xs tabular-nums">
-          {m.memo_no ? String(m.memo_no).padStart(3, "0") : "—"}
-        </span>
-      </div>
+        <div
+          className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[10px] font-bold ${
+            isDraft
+              ? "bg-yellow-500/15 text-yellow-700"
+              : isVoid
+                ? "bg-destructive/10 text-destructive"
+                : "bg-primary/10 text-primary"
+          }`}
+        >
+          <span className="text-[8px] uppercase">M</span>
+          <span className="text-xs tabular-nums">
+            {m.memo_no ? String(m.memo_no).padStart(3, "0") : "—"}
+          </span>
+        </div>
 
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-primary">
-          {m.shop_name ?? "(কাস্টমার নেই)"}
-        </p>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {m.party_serial && `${toBnDigits(m.party_serial)} · `}
-          {englishDateBn(m.memo_date).replace(" খ্রিস্টাব্দ", "")}
-          {m.mobile && ` · ${toBnDigits(m.mobile)}`}
-        </p>
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-primary">
+            {m.shop_name ?? "(কাস্টমার নেই)"}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {m.party_serial && `${toBnDigits(m.party_serial)} · `}
+            {englishDateBn(m.memo_date).replace(" খ্রিস্টাব্দ", "")}
+            {m.mobile && ` · ${toBnDigits(m.mobile)}`}
+          </p>
+        </div>
 
-      {/* Amount */}
-      <div className="shrink-0 text-right">
-        <p className="text-sm font-bold tabular-nums text-primary">{taka(m.total)}</p>
-        {due > 0 && !isVoid && (
-          <p className="text-[10px] tabular-nums text-destructive">বাকি {taka(due)}</p>
-        )}
-        {isDraft && <p className="text-[10px] font-medium text-yellow-700">চলবে</p>}
-        {isVoid && <p className="text-[10px] font-medium text-destructive">বাতিল</p>}
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold tabular-nums text-primary">{taka(m.total)}</p>
+          {due > 0 && !isVoid && (
+            <p className="text-[10px] tabular-nums text-destructive">বাকি {taka(due)}</p>
+          )}
+          {isDraft && <p className="text-[10px] font-medium text-yellow-700">চলবে</p>}
+          {isVoid && <p className="text-[10px] font-medium text-destructive">বাতিল</p>}
+        </div>
+      </Link>
+
+      {/* 🐛 Quick actions — hover এ show */}
+      <div className="no-print flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <Link
+          to="/admin/memo/$id"
+          params={{ id: m.id }}
+          className="flex h-8 w-8 items-center justify-center rounded-md border bg-card text-primary hover:bg-accent"
+          title="খুলুন"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+        <Link
+          to="/admin/memo/$id"
+          params={{ id: m.id }}
+          search={{ print: "1" } as never}
+          className="flex h-8 w-8 items-center justify-center rounded-md border bg-card text-primary hover:bg-accent"
+          title="Print view"
+        >
+          <Printer className="h-3.5 w-3.5" />
+        </Link>
       </div>
-    </Link>
+    </div>
   );
 }

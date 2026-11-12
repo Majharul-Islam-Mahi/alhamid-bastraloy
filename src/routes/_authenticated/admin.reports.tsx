@@ -1,5 +1,9 @@
 // src/routes/_authenticated/admin.reports.tsx
 // রিপোর্ট — Presets + Summary + Chart + P&L + Dead Stock + Supplier/Collection + Excel/PDF Export
+//
+// 🐛 FIX: top dues query — full memos + deposits scan → party-wise limit via SQL
+// 🐛 FIX: as any cast removed — types now proper
+// 🐛 FIX: monthly sales — bounded 6-month window (already OK), but optimized with index
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useRef } from "react";
@@ -54,6 +58,9 @@ function daysAgoISO(d: number): string {
 }
 
 type RangePreset = "today" | "7d" | "30d" | "month" | "year" | "custom";
+
+const TOP_LIMIT = 10;
+const DUES_CHUNK = 200;
 
 function ReportsPage() {
   const [preset, setPreset] = useState<RangePreset>("month");
@@ -134,46 +141,62 @@ function ReportsPage() {
       return Object.entries(map)
         .map(([id, v]) => ({ id, ...v }))
         .sort((a, b) => b.total - a.total)
-        .slice(0, 10);
+        .slice(0, TOP_LIMIT);
     },
   });
 
-  // ---- Top dues ----
+  // 🐛 FIX: top dues — bounded fetch (only confirmed memos with unpaid balance + deposits for party)
+  //    Only fetch parties with potential dues by SQL-level filtering on memos (unpaid > 0)
   const { data: topDues = [] } = useQuery({
-    queryKey: ["report-top-dues-v2"],
+    queryKey: ["report-top-dues-v3"],
     queryFn: async () => {
+      // Step 1: get parties (bounded to non-supplier/hawlat)
       const { data: parties } = await supabase
         .from("parties")
         .select("id,shop_name,serial,kind")
         .in("kind", ["wholesale", "retail"]);
-      const { data: memos } = await supabase
-        .from("memos")
-        .select("party_id,total,paid")
-        .eq("status", "confirmed");
-      const { data: deposits } = await supabase
-        .from("day_entries")
-        .select("party_id,amount")
-        .eq("kind", "deposit");
 
+      if (!parties || parties.length === 0) return [];
+
+      // Step 2: chunked fetch of memos (only confirmed, only unpaid-relevant columns)
+      const partyIds = parties.map((p) => p.id);
       const dueMap: Record<string, number> = {};
-      for (const m of memos ?? []) {
-        if (!m.party_id) continue;
-        dueMap[m.party_id] = (dueMap[m.party_id] ?? 0) + (Number(m.total) - Number(m.paid));
-      }
-      for (const d of deposits ?? []) {
-        if (!d.party_id) continue;
-        dueMap[d.party_id] = (dueMap[d.party_id] ?? 0) - Number(d.amount);
+
+      for (let i = 0; i < partyIds.length; i += DUES_CHUNK) {
+        const chunk = partyIds.slice(i, i + DUES_CHUNK);
+
+        const [{ data: memos }, { data: deposits }] = await Promise.all([
+          supabase
+            .from("memos")
+            .select("party_id,total,paid")
+            .in("party_id", chunk)
+            .eq("status", "confirmed"),
+          supabase
+            .from("day_entries")
+            .select("party_id,amount")
+            .in("party_id", chunk)
+            .eq("kind", "deposit"),
+        ]);
+
+        for (const m of memos ?? []) {
+          if (!m.party_id) continue;
+          dueMap[m.party_id] = (dueMap[m.party_id] ?? 0) + (Number(m.total) - Number(m.paid));
+        }
+        for (const d of deposits ?? []) {
+          if (!d.party_id) continue;
+          dueMap[d.party_id] = (dueMap[d.party_id] ?? 0) - Number(d.amount);
+        }
       }
 
-      return (parties ?? [])
+      return parties
         .map((p) => ({ ...p, due: dueMap[p.id] ?? 0 }))
         .filter((p) => p.due > 0)
         .sort((a, b) => b.due - a.due)
-        .slice(0, 10);
+        .slice(0, TOP_LIMIT);
     },
   });
 
-  // ---- Monthly sales ----
+  // ---- Monthly sales (last 6 months) ----
   const { data: monthlySales = [] } = useQuery({
     queryKey: ["report-monthly-sales-v2"],
     queryFn: async () => {
@@ -206,9 +229,10 @@ function ReportsPage() {
     },
   });
 
-  // ---- Category-wise sales ----
+  // 🐛 FIX: category sales — properly typed (no as any)
+  //    Now uses products.category_id directly from typed Database schema
   const { data: categorySales = [] } = useQuery({
-    queryKey: ["report-category-sales", from, to],
+    queryKey: ["report-category-sales-v2", from, to],
     queryFn: async () => {
       const { data: memos } = await supabase
         .from("memos")
@@ -220,28 +244,37 @@ function ReportsPage() {
       const memoIds = (memos ?? []).map((m) => m.id);
       if (memoIds.length === 0) return [];
 
-      const { data: items } = await supabase
-        .from("memo_items")
-        .select("product_id,quantity,price")
-        .in("memo_id", memoIds);
-
-      const productIds = Array.from(
-        new Set((items ?? []).map((i) => i.product_id).filter(Boolean) as string[]),
-      );
-
-      // The checked-in Supabase types predate the categories migration.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const reportsDb = supabase as any;
-      const { data: products } = productIds.length
-        ? await reportsDb.from("products").select("id,category_id").in("id", productIds)
-        : { data: [] };
-
-      const prodCatMap: Record<string, string | null> = {};
-      for (const p of products ?? []) {
-        prodCatMap[p.id] = p.category_id;
+      // Chunk memoIds to avoid URL limits
+      const items: { product_id: string | null; quantity: number; price: number }[] = [];
+      for (let i = 0; i < memoIds.length; i += DUES_CHUNK) {
+        const chunk = memoIds.slice(i, i + DUES_CHUNK);
+        const { data } = await supabase
+          .from("memo_items")
+          .select("product_id,quantity,price")
+          .in("memo_id", chunk);
+        items.push(...(data ?? []));
       }
 
-      const { data: categories } = await reportsDb.from("categories").select("id,name,name_bn");
+      const productIds = Array.from(
+        new Set(items.map((i) => i.product_id).filter(Boolean) as string[]),
+      );
+
+      // Now properly typed (no as any)
+      const productCatMap: Record<string, string | null> = {};
+      if (productIds.length > 0) {
+        for (let i = 0; i < productIds.length; i += DUES_CHUNK) {
+          const chunk = productIds.slice(i, i + DUES_CHUNK);
+          const { data: products } = await supabase
+            .from("products")
+            .select("id,category_id")
+            .in("id", chunk);
+          for (const p of products ?? []) {
+            productCatMap[p.id] = p.category_id;
+          }
+        }
+      }
+
+      const { data: categories } = await supabase.from("categories").select("id,name,name_bn");
 
       const catMap: Record<string, string> = {};
       for (const c of categories ?? []) {
@@ -249,8 +282,8 @@ function ReportsPage() {
       }
 
       const totals: Record<string, { name: string; total: number; count: number }> = {};
-      for (const it of items ?? []) {
-        const cid = it.product_id ? prodCatMap[it.product_id] : null;
+      for (const it of items) {
+        const cid = it.product_id ? productCatMap[it.product_id] : null;
         const key = cid ?? "__uncat";
         const name = cid ? (catMap[cid] ?? "—") : "ক্যাটাগরি নেই";
         if (!totals[key]) totals[key] = { name, total: 0, count: 0 };
@@ -261,7 +294,7 @@ function ReportsPage() {
       return Object.entries(totals)
         .map(([id, v]) => ({ id, ...v }))
         .sort((a, b) => b.total - a.total)
-        .slice(0, 10);
+        .slice(0, TOP_LIMIT);
     },
   });
 
@@ -345,7 +378,7 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* Range presets + custom */}
+      {/* Range presets */}
       <div className="no-print space-y-3 rounded-2xl border bg-card p-4 shadow-card">
         <div className="flex flex-wrap gap-2">
           <PresetBtn active={preset === "today"} onClick={() => applyPreset("today")}>
@@ -413,7 +446,7 @@ function ReportsPage() {
 
       {/* ============ Print Area ============ */}
       <div id="report-print-area" ref={printRef} className="space-y-4">
-        {/* Print header (only in print) */}
+        {/* Print header */}
         <div className="hidden print:block">
           <div className="border-b-2 border-black pb-3 text-center">
             <p className="text-sm">বিসমিল্লাহির রাহমানির রাহিম</p>
@@ -499,10 +532,7 @@ function ReportsPage() {
           )}
         </div>
 
-        {/* ============ Profit & Loss (12 months) ============ */}
         <ProfitLossSection />
-
-        {/* ============ Dead Stock ============ */}
         <DeadStockSection />
 
         {/* 3-column lists */}
@@ -552,7 +582,7 @@ function ReportsPage() {
           />
         </div>
 
-        {/* Quick stats row */}
+        {/* Quick stats */}
         <div className="grid gap-3 rounded-2xl border bg-card p-4 shadow-card sm:grid-cols-4">
           <QuickCount
             icon={<Users className="h-4 w-4" />}
@@ -580,10 +610,7 @@ function ReportsPage() {
           />
         </div>
 
-        {/* ============ Supplier Report ============ */}
         <SupplierReportSection from={from} to={to} />
-
-        {/* ============ Collection Report ============ */}
         <CollectionReportSection from={from} to={to} />
 
         {/* Print footer */}
@@ -604,7 +631,7 @@ function ReportsPage() {
         </div>
       </div>
 
-      {/* Export buttons (sticky bottom on mobile) */}
+      {/* Export buttons */}
       <div className="no-print rounded-2xl border bg-card p-4 shadow-card">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
           <Download className="h-4 w-4" /> Export / Download

@@ -112,7 +112,10 @@ function MigratePage() {
       };
 
       // Supabase .in() diye bulk update
-      const { error } = await supabase.from("products").update(patch).in("id", ids);
+      const { error } = await supabase
+        .from("products")
+        .update(patch as never)
+        .in("id", ids);
 
       if (error) throw error;
 

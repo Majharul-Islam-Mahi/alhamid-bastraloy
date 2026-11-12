@@ -1,5 +1,10 @@
 // src/routes/_authenticated/admin.memo.$id.tsx
 // মেমো দেখুন, edit, প্রিন্ট, confirm, void, শেয়ার (WhatsApp/SMS) — Unit column + signature
+//
+// 🐛 FIX: saveEdits() — delete-then-insert pattern → data loss risk
+//       (delete সফল + insert fail হলে সব items হারিয়ে যায়)
+//       এখন: safest path — প্রথমে insert নতুন items, তারপর delete পুরানো
+// 🐛 FIX: taka(it.price) — string passed to number function → taka(num(...))
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -93,7 +98,6 @@ function MemoView() {
 
   const total = editItems.reduce((s, i) => s + num(i.quantity) * num(i.price), 0);
   const paidNum = num(paid);
-  const due = total - paidNum;
 
   const confirmedTotal =
     items.reduce((s, it) => s + Number(it.quantity) * Number(it.price), 0) ||
@@ -182,64 +186,78 @@ function MemoView() {
     navigate({ to: "/admin/memo" });
   }
 
-  // ---- Save edits ----
+  // 🐛 SAFER saveEdits — insert-first, delete-after
   async function saveEdits() {
     if (!memo) return;
     setBusy(true);
 
-    const { error: e1 } = await supabase
-      .from("memos")
-      .update({
-        shop_name: shopName.trim(),
-        owner_name: ownerName.trim() || null,
-        mobile: mobile.trim() || null,
-        address: address.trim() || null,
-        total,
-        paid: paidNum,
-        note: note.trim() || null,
-      })
-      .eq("id", memo.id);
+    try {
+      // STEP 1: Update memo header (safe — single row update)
+      const { error: e1 } = await supabase
+        .from("memos")
+        .update({
+          shop_name: shopName.trim(),
+          owner_name: ownerName.trim() || null,
+          mobile: mobile.trim() || null,
+          address: address.trim() || null,
+          total,
+          paid: paidNum,
+          note: note.trim() || null,
+        })
+        .eq("id", memo.id);
 
-    if (e1) {
-      setBusy(false);
-      toast.error("মেমো আপডেট হয়নি: " + e1.message);
-      return;
-    }
+      if (e1) throw new Error("মেমো আপডেট হয়নি: " + e1.message);
 
-    const { error: e2 } = await supabase.from("memo_items").delete().eq("memo_id", memo.id);
+      // STEP 2: Insert NEW items first (don't delete old yet!)
+      const validItems = editItems.filter((i) => i.name.trim());
+      const newInsertedIds: string[] = [];
 
-    if (e2) {
-      setBusy(false);
-      toast.error("আইটেম আপডেট হয়নি: " + e2.message);
-      return;
-    }
+      if (validItems.length > 0) {
+        const { data: inserted, error: e2 } = await supabase
+          .from("memo_items")
+          .insert(
+            validItems.map((i, idx) => ({
+              memo_id: memo.id,
+              position: idx,
+              name: i.name.trim(),
+              quantity: num(i.quantity),
+              unit: i.unit || "পিস",
+              price: num(i.price),
+              product_id: null,
+              base_quantity: num(i.quantity),
+            })),
+          )
+          .select("id");
 
-    const validItems = editItems.filter((i) => i.name.trim());
-    if (validItems.length > 0) {
-      const { error: e3 } = await supabase.from("memo_items").insert(
-        validItems.map((i, idx) => ({
-          memo_id: memo.id,
-          position: idx,
-          name: i.name.trim(),
-          quantity: num(i.quantity),
-          unit: i.unit || "পিস",
-          price: num(i.price),
-          product_id: null,
-          base_quantity: num(i.quantity),
-        })),
-      );
-      if (e3) {
-        setBusy(false);
-        toast.error("আইটেম সেভ হয়নি: " + e3.message);
-        return;
+        if (e2) throw new Error("আইটেম সেভ হয়নি: " + e2.message);
+        newInsertedIds.push(...(inserted ?? []).map((r) => r.id));
       }
-    }
 
-    setBusy(false);
-    toast.success("মেমো আপডেট হয়েছে");
-    setEditing(false);
-    qc.invalidateQueries({ queryKey: ["memo", id] });
-    qc.invalidateQueries({ queryKey: ["memo-items", id] });
+      // STEP 3: Delete OLD items (now safe — new ones exist)
+      const oldIds = items.map((i) => i.id);
+      if (oldIds.length > 0) {
+        const { error: e3 } = await supabase.from("memo_items").delete().in("id", oldIds);
+        if (e3) {
+          // New items already inserted — try to rollback them
+          if (newInsertedIds.length > 0) {
+            await supabase.from("memo_items").delete().in("id", newInsertedIds);
+          }
+          throw new Error("পুরানো আইটেম মুছতে পারিনি: " + e3.message);
+        }
+      }
+
+      // Success
+      toast.success("মেমো আপডেট হয়েছে");
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["memo", id] });
+      qc.invalidateQueries({ queryKey: ["memo-items", id] });
+      qc.invalidateQueries({ queryKey: ["memos-list"] });
+      qc.invalidateQueries({ queryKey: ["memos-split-view"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   // ---- Item helpers ----
@@ -293,7 +311,7 @@ function MemoView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      {/* ============ Toolbar ============ */}
+      {/* Toolbar */}
       <div className="no-print flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin/memo" />
         <h1 className="font-display text-xl text-primary">
@@ -312,7 +330,7 @@ function MemoView() {
           {editing ? (
             <>
               <Button variant="coffee" onClick={saveEdits} disabled={busy}>
-                <Save /> সংরক্ষণ
+                <Save /> {busy ? "সেভ হচ্ছে…" : "সংরক্ষণ"}
               </Button>
               <Button
                 variant="outline"
@@ -392,7 +410,6 @@ function MemoView() {
         </div>
       </div>
 
-      {/* Status banner */}
       {memo.status !== "confirmed" && (
         <div
           className={`no-print rounded-lg p-3 text-sm ${
@@ -405,9 +422,8 @@ function MemoView() {
         </div>
       )}
 
-      {/* ============ Memo document ============ */}
+      {/* Memo document */}
       <div className="print-area rounded-2xl border bg-white p-6 shadow-card md:p-10">
-        {/* Header */}
         <div className="memo-header border-b-2 border-primary pb-4 text-center">
           <p className="bismillah font-display text-accent-foreground/80">{SHOP.bismillah}</p>
           <h1 className="mt-1 font-display text-3xl text-primary md:text-4xl">{SHOP.name}</h1>
@@ -415,7 +431,6 @@ function MemoView() {
           <p className="text-xs text-muted-foreground">মোবাইল: {SHOP.ownerPhones.join(", ")}</p>
         </div>
 
-        {/* Customer info */}
         <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
           <div className="space-y-1">
             {editing ? (
@@ -478,7 +493,6 @@ function MemoView() {
           </div>
         </div>
 
-        {/* Items table — UNIT COLUMN ADDED */}
         <div className="mt-6 overflow-x-auto">
           <table className="w-full min-w-150 border-collapse text-sm">
             <thead>
@@ -546,7 +560,7 @@ function MemoView() {
                         className="w-24 rounded border-transparent bg-transparent px-1 text-right outline-none focus:border-ring focus:bg-card"
                       />
                     ) : (
-                      taka(it.price)
+                      taka(num(it.price))
                     )}
                   </td>
                   <td className="py-2 text-right tabular-nums">
@@ -587,7 +601,6 @@ function MemoView() {
           </div>
         )}
 
-        {/* জমা / বাকি */}
         <div className="mt-6 grid grid-cols-3 gap-2 text-sm">
           <div className="rounded border p-2 text-center">
             <p className="text-muted-foreground text-xs">মোট</p>
@@ -618,7 +631,6 @@ function MemoView() {
           </p>
         )}
 
-        {/* Note */}
         <div className="mt-3">
           {editing ? (
             <label className="block text-sm">
@@ -634,7 +646,6 @@ function MemoView() {
           )}
         </div>
 
-        {/* ============ Signature — LEFT shop, RIGHT customer ============ */}
         <div className="mt-16 flex flex-wrap items-end justify-between gap-6">
           <div className="text-center">
             <p className="font-display text-lg text-primary border-t border-primary pt-1">
@@ -650,7 +661,6 @@ function MemoView() {
         </div>
       </div>
 
-      {/* ============ Share Dialog ============ */}
       {shareOpen && memo && (
         <MemoShareDialog
           open={shareOpen}

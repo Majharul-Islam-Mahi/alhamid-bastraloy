@@ -1,10 +1,5 @@
 // src/routes/_authenticated/account_.messages.tsx
-// Customer chat — WhatsApp-style with file upload + message info
-// [FIX] Renamed from account.messages.tsx → account_.messages.tsx
-//       Route: /_authenticated/account_/messages (sibling of account.tsx)
-//       এই file হবে account.tsx এর sibling, তাই /account/messages URL-এ
-//       account.tsx render হবে না — শুধু এই page render হবে।
-
+// Customer chat — voice, file, avatar
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -15,21 +10,19 @@ import { SiteHeader } from "@/components/shop/SiteHeader";
 import { BackButton } from "@/components/shop/BackButton";
 import { Footer } from "@/components/shop/Footer";
 import { Button } from "@/components/ui/button";
-import {
-  ChatBubble,
-  ChatDateDivider,
-  ChatEmpty,
-  MessageInfoDialog,
-} from "@/components/chat/ChatBubble";
+import { ChatBubble, ChatDateDivider, ChatEmpty, MessageInfoDialog } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { supabase } from "@/integrations/supabase/client";
 import {
   myMessages,
   sendCustomerMessage,
   sendCustomerFile,
+  sendCustomerVoice,
   markCustomerSeen,
 } from "@/lib/chat.functions";
 import { useChatNotification } from "@/hooks/use-chat-notification";
+import { useShopSettings } from "@/hooks/use-shop-settings";
+import { useMe } from "@/hooks/use-me";
 import { toBnDigits, SHOP } from "@/lib/shop";
 
 export const Route = createFileRoute("/_authenticated/account_/messages")({
@@ -52,15 +45,19 @@ type Message = {
   file_name?: string | null;
   file_size?: number | null;
   mime_type?: string | null;
+  duration_seconds?: number | null;
   delivered_at?: string | null;
   seen_at?: string | null;
 };
 
 function CustomerMessages() {
   const qc = useQueryClient();
+  const { data: me } = useMe();
+  const { data: shop } = useShopSettings();
   const fetchMsgs = useServerFn(myMessages);
   const sendMsg = useServerFn(sendCustomerMessage);
   const sendFile = useServerFn(sendCustomerFile);
+  const sendVoice = useServerFn(sendCustomerVoice);
   const markSeen = useServerFn(markCustomerSeen);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -75,9 +72,7 @@ function CustomerMessages() {
   function toggleSound() {
     const v = !soundEnabled;
     setSoundEnabled(v);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("chat_sound_enabled", String(v));
-    }
+    if (typeof window !== "undefined") localStorage.setItem("chat_sound_enabled", String(v));
     toast.success(v ? "Sound চালু হয়েছে" : "Sound বন্ধ হয়েছে");
   }
 
@@ -87,31 +82,20 @@ function CustomerMessages() {
     refetchInterval: 5000,
   });
 
-  const messages = useMemo(
-    () => (data?.messages ?? []) as Message[],
-    [data],
-  );
+  const messages = useMemo(() => (data?.messages ?? []) as Message[], [data]);
 
   const unreadFromAdmin = messages.filter(
     (m) => m.sender_role === "admin" && m.status !== "seen",
   ).length;
 
-  useChatNotification({
-    unreadCount: unreadFromAdmin,
-    enabled: soundEnabled,
-    toastOnNew: true,
-  });
+  useChatNotification({ unreadCount: unreadFromAdmin, enabled: soundEnabled, toastOnNew: true });
 
-  // Auto scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // Auto mark seen
   useEffect(() => {
-    if (
-      messages.some((m) => m.sender_role === "admin" && m.status !== "seen")
-    ) {
+    if (messages.some((m) => m.sender_role === "admin" && m.status !== "seen")) {
       markSeen()
         .then(() => {
           qc.invalidateQueries({ queryKey: ["my-chat"] });
@@ -121,29 +105,22 @@ function CustomerMessages() {
     }
   }, [messages, markSeen, qc]);
 
-  // Fetch signed URLs for file attachments
   useEffect(() => {
     const fileMsgs = messages.filter((m) => m.file_path);
     if (fileMsgs.length === 0) return;
-
     let cancelled = false;
     (async () => {
       const map: Record<string, string> = {};
       await Promise.all(
         fileMsgs.map(async (m) => {
           if (!m.file_path) return;
-          const { data } = await supabase.storage
-            .from("chat-files")
-            .createSignedUrl(m.file_path, 3600);
+          const { data } = await supabase.storage.from("chat-files").createSignedUrl(m.file_path, 3600);
           if (data?.signedUrl) map[m.id] = data.signedUrl;
         }),
       );
       if (!cancelled) setSignedMap(map);
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [messages]);
 
   async function handleSend(msg: string) {
@@ -160,15 +137,10 @@ function CustomerMessages() {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) throw new Error("লগইন নেই");
-
     const ext = file.name.split(".").pop() || "bin";
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const { error: upErr } = await supabase.storage
-      .from("chat-files")
-      .upload(path, file, { upsert: false });
+    const { error: upErr } = await supabase.storage.from("chat-files").upload(path, file, { upsert: false });
     if (upErr) throw new Error("Upload ব্যর্থ: " + upErr.message);
-
     try {
       await sendFile({
         data: {
@@ -186,7 +158,33 @@ function CustomerMessages() {
     }
   }
 
-  // Group by date
+  async function handleSendVoice(blob: Blob, durationSec: number) {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) throw new Error("লগইন নেই");
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    const path = `${userId}/voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("chat-files")
+      .upload(path, blob, { upsert: false, contentType: blob.type });
+    if (upErr) throw new Error("Voice upload ব্যর্থ: " + upErr.message);
+    try {
+      await sendVoice({
+        data: {
+          filePath: path,
+          fileSize: blob.size,
+          mimeType: blob.type,
+          durationSeconds: durationSec,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["my-chat"] });
+      toast.success(`Voice message পাঠানো হয়েছে (${durationSec}s)`);
+    } catch (e) {
+      await supabase.storage.from("chat-files").remove([path]);
+      throw e;
+    }
+  }
+
   const groups: { date: string; msgs: Message[] }[] = [];
   let lastDate = "";
   for (const m of messages) {
@@ -203,38 +201,30 @@ function CustomerMessages() {
       <SiteHeader />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col p-3 md:p-6">
-        {/* WhatsApp-style header */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <BackButton fallback="/account" label="আমার হিসাব" />
           <div className="flex items-center gap-3">
-            <span
-              className="flex h-10 w-10 items-center justify-center rounded-full"
-              style={{
-                background:
-                  "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
-                color: "#f8f3ea",
-              }}
-            >
+            {/* Shop photo or fallback */}
+            {shop?.shopPhoto ? (
+              <img
+                src={shop.shopPhoto}
+                alt={SHOP.name}
+                className="h-10 w-10 shrink-0 rounded-full object-cover"
+                style={{ border: "2px solid #c9924a" }}
+              />
+            ) : (
               <span
-                className="text-lg"
-                style={{ fontFamily: "'Tiro Bangla', serif" }}
+                className="flex h-10 w-10 items-center justify-center rounded-full"
+                style={{ background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)", color: "#f8f3ea" }}
               >
-                আ
+                <span className="text-lg" style={{ fontFamily: "'Tiro Bangla', serif" }}>আ</span>
               </span>
-            </span>
+            )}
             <div className="min-w-0">
-              <p
-                className="truncate text-sm font-semibold"
-                style={{
-                  fontFamily: "'Tiro Bangla', serif",
-                  color: "#3a2318",
-                }}
-              >
+              <p className="truncate text-sm font-semibold" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
                 {SHOP.name}
               </p>
-              <p className="text-[11px]" style={{ color: "#2d7a4f" }}>
-                ● অনলাইন
-              </p>
+              <p className="text-[11px]" style={{ color: "#2d7a4f" }}>● অনলাইন</p>
             </div>
             {unreadFromAdmin > 0 && (
               <span className="rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
@@ -243,35 +233,16 @@ function CustomerMessages() {
             )}
           </div>
           <div className="ml-auto flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleSound}
-              title={soundEnabled ? "Sound বন্ধ" : "Sound চালু"}
-            >
-              {soundEnabled ? (
-                <Bell className="h-3.5 w-3.5 text-primary" />
-              ) : (
-                <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
+            <Button variant="outline" size="sm" onClick={toggleSound} title={soundEnabled ? "Sound বন্ধ" : "Sound চালু"}>
+              {soundEnabled ? <Bell className="h-3.5 w-3.5 text-primary" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              title="রিফ্রেশ"
-            >
+            <Button variant="outline" size="sm" onClick={() => refetch()} title="রিফ্রেশ">
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
 
-        {/* Chat box */}
-        <div
-          className="flex flex-1 flex-col overflow-hidden rounded-2xl border shadow-card"
-          style={{ borderColor: "#dbcbb2", backgroundColor: "#efeae2" }}
-        >
-          {/* Messages area */}
+        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border shadow-card" style={{ borderColor: "#dbcbb2", backgroundColor: "#efeae2" }}>
           <div
             className="flex-1 overflow-y-auto p-3 md:p-4"
             style={{
@@ -283,9 +254,7 @@ function CustomerMessages() {
             }}
           >
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                লোড হচ্ছে…
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">লোড হচ্ছে…</p>
             ) : messages.length === 0 ? (
               <ChatEmpty />
             ) : (
@@ -308,11 +277,13 @@ function CustomerMessages() {
             )}
           </div>
 
-          {/* Input */}
-          <ChatInput onSend={handleSend} onSendFile={handleSendFile} />
+          <ChatInput
+            onSend={handleSend}
+            onSendFile={handleSendFile}
+            onSendVoice={handleSendVoice}
+          />
         </div>
 
-        {/* Info */}
         <p className="mt-3 text-center text-xs" style={{ color: "#7a6558" }}>
           মালিক/ম্যানেজারের সাথে যোগাযোগ করুন — ২৪ ঘণ্টার মধ্যে উত্তর পাবেন
         </p>
@@ -321,11 +292,7 @@ function CustomerMessages() {
       <Footer />
 
       {infoMsg && (
-        <MessageInfoDialog
-          msg={infoMsg as never}
-          isMine={infoMsg.sender_role === "customer"}
-          onClose={() => setInfoMsg(null)}
-        />
+        <MessageInfoDialog msg={infoMsg as never} isMine={infoMsg.sender_role === "customer"} onClose={() => setInfoMsg(null)} />
       )}
     </div>
   );

@@ -1,22 +1,25 @@
 // src/components/chat/ChatInput.tsx
-// Message লেখার input box + Send button + File attachment
+// Message input box + Send + File + Voice
 import { useState, useRef } from "react";
 import { Send, Loader2, Paperclip, X, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { ChatVoiceRecorder } from "./ChatVoiceRecorder";
 
 type Props = {
   onSend: (message: string) => Promise<void>;
   onSendFile?: (file: File, caption?: string) => Promise<void>;
+  onSendVoice?: (blob: Blob, durationSec: number) => Promise<void>;
   disabled?: boolean;
   placeholder?: string;
 };
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
 
 export function ChatInput({
   onSend,
   onSendFile,
+  onSendVoice,
   disabled = false,
   placeholder = "Message লিখুন…",
 }: Props) {
@@ -33,7 +36,6 @@ export function ChatInput({
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-
     if (f.size > MAX_BYTES) {
       toast.error("১০ MB এর বেশি file পাঠানো যাবে না");
       return;
@@ -53,7 +55,6 @@ export function ChatInput({
     e?.preventDefault();
     const msg = text.trim();
 
-    // File attached? → send with caption
     if (pending && onSendFile) {
       if (busy || disabled) return;
       setBusy(true);
@@ -67,7 +68,6 @@ export function ChatInput({
       return;
     }
 
-    // Text only
     if (!msg || busy || disabled) return;
     setBusy(true);
     try {
@@ -81,12 +81,7 @@ export function ChatInput({
   const isImage = pending?.type.startsWith("image/");
 
   return (
-    <form
-      onSubmit={submit}
-      className="no-print border-t bg-card"
-      style={{ borderColor: "#dbcbb2" }}
-    >
-      {/* Pending file preview */}
+    <form onSubmit={submit} className="no-print border-t bg-card" style={{ borderColor: "#dbcbb2" }}>
       {pending && (
         <div
           className="flex items-center gap-2 border-b px-3 py-2"
@@ -133,11 +128,7 @@ export function ChatInput({
               onClick={pickFile}
               disabled={disabled || busy || !!pending}
               className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40"
-              style={{
-                borderColor: "#dbcbb2",
-                backgroundColor: "#fdfaf5",
-                color: "#8a6a45",
-              }}
+              style={{ borderColor: "#dbcbb2", backgroundColor: "#fdfaf5", color: "#8a6a45" }}
               title="ছবি বা PDF পাঠান"
               aria-label="File attach"
             >
@@ -145,6 +136,9 @@ export function ChatInput({
             </button>
           </>
         )}
+
+        {/* 🎤 Voice recorder */}
+        {onSendVoice && <ChatVoiceRecorder onSend={onSendVoice} disabled={disabled || busy} />}
 
         <textarea
           value={text}
@@ -167,9 +161,7 @@ export function ChatInput({
           type="submit"
           disabled={busy || disabled || (!text.trim() && !pending)}
           className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl text-primary-foreground transition disabled:opacity-40"
-          style={{
-            background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
-          }}
+          style={{ background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)" }}
           aria-label="পাঠান"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

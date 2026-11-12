@@ -1,50 +1,49 @@
 // src/lib/chat.functions.ts
-// Chat system — customer ↔ admin message
-// Features: text, file/image, voice call entries, seen/delivered tracking
+// Chat system — 3-state tick (sent → delivered → seen)
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { checkRateLimit } from "@/lib/rate-limit.server";
 
-const FILE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const FILE_MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
+
+function nowISO(): string {
+  return new Date().toISOString();
+}
 
 // ============================================================
 // CUSTOMER SIDE
 // ============================================================
 
-// ---- Customer: নিজের chat messages ----
+// myMessages — fetches + auto-marks admin→customer as delivered
 export const myMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    // 🐛 3-STATE: mark admin's "sent" messages as "delivered"
+    await supabaseAdmin
+      .from("chat_messages")
+      .update({ status: "delivered", delivered_at: nowISO() })
+      .eq("customer_id", context.userId)
+      .eq("sender_role", "admin")
+      .eq("status", "sent");
+
     const { data } = await supabaseAdmin
       .from("chat_messages")
       .select("*")
       .eq("customer_id", context.userId)
       .order("created_at", { ascending: true })
       .limit(500);
-
     return { messages: data ?? [] };
   });
 
-// ---- Customer: message পাঠানো ----
 export const sendCustomerMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d) =>
-    z
-      .object({
-        message: z.string().trim().min(1).max(2000),
-      })
-      .parse(d),
-  )
+  .validator((d) => z.object({ message: z.string().trim().min(1).max(2000) }).parse(d))
   .handler(async ({ data, context }) => {
     const rl = await checkRateLimit(`chat:${context.userId}`, 30, 5);
-    if (!rl.ok) {
-      throw new Error(
-        `অনেকবার message পাঠানো হয়েছে। ${Math.ceil(rl.retryAfter / 60)} মিনিট পর আবার চেষ্টা করুন।`,
-      );
-    }
+    if (!rl.ok) throw new Error("অনেকবার message পাঠানো হয়েছে। একটু অপেক্ষা করুন।");
 
     const { data: msg, error } = await supabaseAdmin
       .from("chat_messages")
@@ -54,16 +53,15 @@ export const sendCustomerMessage = createServerFn({ method: "POST" })
         sender_role: "customer",
         message: data.message,
         message_type: "text",
-        status: "sent",
+        status: "sent", // 🐛 was "delivered"
+        delivered_at: null,
       })
       .select("*")
       .single();
-
     if (error) throw new Error("Message পাঠানো যায়নি: " + error.message);
     return { message: msg };
   });
 
-// ---- Customer: file সহ message ----
 export const sendCustomerFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
@@ -78,18 +76,10 @@ export const sendCustomerFile = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!ALLOWED_MIME.includes(data.mimeType)) {
-      throw new Error("শুধু ছবি বা PDF পাঠানো যাবে");
-    }
-
+    if (!ALLOWED_MIME.includes(data.mimeType)) throw new Error("শুধু ছবি বা PDF পাঠানো যাবে");
     const rl = await checkRateLimit(`chat-file:${context.userId}`, 10, 5);
-    if (!rl.ok) {
-      throw new Error("অনেকবার file পাঠানো হয়েছে। একটু অপেক্ষা করুন।");
-    }
-
-    if (!data.filePath.startsWith(`${context.userId}/`)) {
-      throw new Error("Invalid file path");
-    }
+    if (!rl.ok) throw new Error("অনেকবার file পাঠানো হয়েছে।");
+    if (!data.filePath.startsWith(`${context.userId}/`)) throw new Error("Invalid file path");
 
     const { data: msg, error } = await supabaseAdmin
       .from("chat_messages")
@@ -99,7 +89,8 @@ export const sendCustomerFile = createServerFn({ method: "POST" })
         sender_role: "customer",
         message: data.caption?.trim() || data.fileName,
         message_type: "file",
-        status: "sent",
+        status: "sent", // 🐛
+        delivered_at: null,
         file_path: data.filePath,
         file_name: data.fileName,
         file_size: data.fileSize,
@@ -107,20 +98,57 @@ export const sendCustomerFile = createServerFn({ method: "POST" })
       })
       .select("*")
       .single();
-
     if (error) throw new Error("File পাঠানো যায়নি: " + error.message);
     return { message: msg };
   });
 
-// ---- Customer: voice call log (missed / no answer) ----
-export const logCustomerCall = createServerFn({ method: "POST" })
+export const sendCustomerVoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
     z
       .object({
-        callStatus: z.enum(["no_answer", "missed", "outgoing", "incoming"]),
+        filePath: z.string().min(1).max(500),
+        fileSize: z.number().int().positive().max(FILE_MAX_BYTES),
+        mimeType: z.string().min(1).max(100),
+        durationSeconds: z.number().int().min(1).max(300),
       })
       .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (!data.mimeType.startsWith("audio/")) throw new Error("Invalid voice format");
+    const rl = await checkRateLimit(`chat-voice:${context.userId}`, 20, 5);
+    if (!rl.ok) throw new Error("অনেকবার voice পাঠানো হয়েছে।");
+    if (!data.filePath.startsWith(`${context.userId}/`)) throw new Error("Invalid file path");
+
+    const dur = data.durationSeconds;
+    const durLabel = `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, "0")}`;
+
+    const { data: msg, error } = await supabaseAdmin
+      .from("chat_messages")
+      .insert({
+        customer_id: context.userId,
+        sender_id: context.userId,
+        sender_role: "customer",
+        message: `🎤 Voice message (${durLabel})`,
+        message_type: "voice",
+        status: "sent", // 🐛
+        delivered_at: null,
+        file_path: data.filePath,
+        file_name: "voice.webm",
+        file_size: data.fileSize,
+        mime_type: data.mimeType,
+        duration_seconds: dur,
+      } as never)
+      .select("*")
+      .single();
+    if (error) throw new Error("Voice পাঠানো যায়নি: " + error.message);
+    return { message: msg };
+  });
+
+export const logCustomerCall = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) =>
+    z.object({ callStatus: z.enum(["no_answer", "missed", "outgoing", "incoming"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: msg, error } = await supabaseAdmin
@@ -132,11 +160,11 @@ export const logCustomerCall = createServerFn({ method: "POST" })
         message: "Voice call",
         message_type: "call",
         call_status: data.callStatus,
-        status: "sent",
+        status: "sent", // 🐛
+        delivered_at: null,
       })
       .select("*")
       .single();
-
     if (error) throw new Error("Call log হয়নি");
     return { message: msg };
   });
@@ -145,7 +173,6 @@ export const logCustomerCall = createServerFn({ method: "POST" })
 // ADMIN SIDE
 // ============================================================
 
-// ---- Admin: সব customers যাদের chat আছে ----
 export const listConversations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -190,24 +217,27 @@ export const listConversations = createServerFn({ method: "GET" })
         };
       }
       if (m.sender_role === "customer" && (m.status === "sent" || m.status === "delivered")) {
-        groups[cid].unread += 1;
+        groups[cid]!.unread += 1;
       }
     }
 
     const ids = Object.keys(groups);
 
     const [{ data: profiles }, { data: parties }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id,full_name,mobile,serial").in("id", ids),
+      supabaseAdmin.from("profiles").select("id,full_name,mobile,serial,avatar_path").in("id", ids),
       supabaseAdmin.from("parties").select("user_id,shop_name").in("user_id", ids),
     ]);
 
-    const profMap: Record<string, { full_name: string; mobile: string; serial: string | null }> =
-      {};
+    const profMap: Record<
+      string,
+      { full_name: string; mobile: string; serial: string | null; avatar_path: string | null }
+    > = {};
     for (const p of profiles ?? []) {
       profMap[p.id] = {
         full_name: p.full_name ?? "",
         mobile: p.mobile ?? "",
         serial: p.serial ?? null,
+        avatar_path: p.avatar_path ?? null,
       };
     }
     const partyMap: Record<string, string> = {};
@@ -222,6 +252,7 @@ export const listConversations = createServerFn({ method: "GET" })
         shop_name: partyMap[g.customer_id] ?? "",
         mobile: profMap[g.customer_id]?.mobile ?? "",
         serial: profMap[g.customer_id]?.serial ?? null,
+        avatar_path: profMap[g.customer_id]?.avatar_path ?? null,
       }))
       .sort((a, b) => b.last_at.localeCompare(a.last_at));
 
@@ -229,7 +260,7 @@ export const listConversations = createServerFn({ method: "GET" })
     return { conversations, totalUnread };
   });
 
-// ---- Admin: একটি customer এর সাথে chat ----
+// getConversation — fetches + auto-marks customer→admin as delivered
 export const getConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) => z.object({ customerId: z.string().uuid() }).parse(d))
@@ -243,6 +274,14 @@ export const getConversation = createServerFn({ method: "POST" })
       throw new Error("শুধু মালিক বা মডারেটর এই কাজ করতে পারবেন");
     }
 
+    // 🐛 3-STATE: mark customer's "sent" messages as "delivered"
+    await supabaseAdmin
+      .from("chat_messages")
+      .update({ status: "delivered", delivered_at: nowISO() })
+      .eq("customer_id", data.customerId)
+      .eq("sender_role", "customer")
+      .eq("status", "sent");
+
     const { data: msgs } = await supabaseAdmin
       .from("chat_messages")
       .select("*")
@@ -252,7 +291,7 @@ export const getConversation = createServerFn({ method: "POST" })
 
     const { data: prof } = await supabaseAdmin
       .from("profiles")
-      .select("id,full_name,mobile,serial")
+      .select("id,full_name,mobile,serial,avatar_path")
       .eq("id", data.customerId)
       .maybeSingle();
 
@@ -265,16 +304,10 @@ export const getConversation = createServerFn({ method: "POST" })
     return { messages: msgs ?? [], customer: prof, party };
   });
 
-// ---- Admin: message পাঠানো ----
 export const sendAdminMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
-    z
-      .object({
-        customerId: z.string().uuid(),
-        message: z.string().trim().min(1).max(2000),
-      })
-      .parse(d),
+    z.object({ customerId: z.string().uuid(), message: z.string().trim().min(1).max(2000) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: roles } = await context.supabase
@@ -297,16 +330,15 @@ export const sendAdminMessage = createServerFn({ method: "POST" })
         sender_role: "admin",
         message: data.message,
         message_type: "text",
-        status: "sent",
+        status: "sent", // 🐛
+        delivered_at: null,
       })
       .select("*")
       .single();
-
     if (error) throw new Error("Message পাঠানো যায়নি: " + error.message);
     return { message: msg };
   });
 
-// ---- Admin: file সহ message ----
 export const sendAdminFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
@@ -330,17 +362,10 @@ export const sendAdminFile = createServerFn({ method: "POST" })
     if (!r.some((x) => x === "owner" || x === "moderator")) {
       throw new Error("শুধু মালিক বা মডারেটর এই কাজ করতে পারবেন");
     }
-
-    if (!ALLOWED_MIME.includes(data.mimeType)) {
-      throw new Error("শুধু ছবি বা PDF পাঠানো যাবে");
-    }
-
+    if (!ALLOWED_MIME.includes(data.mimeType)) throw new Error("শুধু ছবি বা PDF পাঠানো যাবে");
     const rl = await checkRateLimit(`chat-file-admin:${context.userId}`, 10, 5);
     if (!rl.ok) throw new Error("অনেকবার file পাঠানো হয়েছে।");
-
-    if (!data.filePath.startsWith(`admin/${context.userId}/`)) {
-      throw new Error("Invalid file path");
-    }
+    if (!data.filePath.startsWith(`admin/${context.userId}/`)) throw new Error("Invalid file path");
 
     const { data: msg, error } = await supabaseAdmin
       .from("chat_messages")
@@ -350,7 +375,8 @@ export const sendAdminFile = createServerFn({ method: "POST" })
         sender_role: "admin",
         message: data.caption?.trim() || data.fileName,
         message_type: "file",
-        status: "sent",
+        status: "sent", // 🐛
+        delivered_at: null,
         file_path: data.filePath,
         file_name: data.fileName,
         file_size: data.fileSize,
@@ -358,30 +384,75 @@ export const sendAdminFile = createServerFn({ method: "POST" })
       })
       .select("*")
       .single();
-
     if (error) throw new Error("File পাঠানো যায়নি: " + error.message);
     return { message: msg };
   });
 
-// ---- Seen mark — customer ----
+export const sendAdminVoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) =>
+    z
+      .object({
+        customerId: z.string().uuid(),
+        filePath: z.string().min(1).max(500),
+        fileSize: z.number().int().positive().max(FILE_MAX_BYTES),
+        mimeType: z.string().min(1).max(100),
+        durationSeconds: z.number().int().min(1).max(300),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: roles } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const r = (roles ?? []).map((x) => x.role);
+    if (!r.some((x) => x === "owner" || x === "moderator")) {
+      throw new Error("শুধু মালিক বা মডারেটর এই কাজ করতে পারবেন");
+    }
+    if (!data.mimeType.startsWith("audio/")) throw new Error("Invalid voice format");
+    const rl = await checkRateLimit(`chat-voice-admin:${context.userId}`, 30, 5);
+    if (!rl.ok) throw new Error("অনেকবার voice পাঠানো হয়েছে।");
+    if (!data.filePath.startsWith(`admin/${context.userId}/`)) throw new Error("Invalid file path");
+
+    const dur = data.durationSeconds;
+    const durLabel = `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, "0")}`;
+
+    const { data: msg, error } = await supabaseAdmin
+      .from("chat_messages")
+      .insert({
+        customer_id: data.customerId,
+        sender_id: context.userId,
+        sender_role: "admin",
+        message: `🎤 Voice message (${durLabel})`,
+        message_type: "voice",
+        status: "sent", // 🐛
+        delivered_at: null,
+        file_path: data.filePath,
+        file_name: "voice.webm",
+        file_size: data.fileSize,
+        mime_type: data.mimeType,
+        duration_seconds: dur,
+      } as never)
+      .select("*")
+      .single();
+    if (error) throw new Error("Voice পাঠানো যায়নি: " + error.message);
+    return { message: msg };
+  });
+
 export const markCustomerSeen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { error } = await supabaseAdmin
       .from("chat_messages")
-      .update({
-        status: "seen",
-        seen_at: new Date().toISOString(),
-      })
+      .update({ status: "seen", seen_at: nowISO() })
       .eq("customer_id", context.userId)
       .eq("sender_role", "admin")
       .neq("status", "seen");
-
     if (error) throw new Error("Seen mark হয়নি");
     return { ok: true };
   });
 
-// ---- Seen mark — admin ----
 export const markAdminSeen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) => z.object({ customerId: z.string().uuid() }).parse(d))
@@ -397,10 +468,7 @@ export const markAdminSeen = createServerFn({ method: "POST" })
 
     const { error } = await supabaseAdmin
       .from("chat_messages")
-      .update({
-        status: "seen",
-        seen_at: new Date().toISOString(),
-      })
+      .update({ status: "seen", seen_at: nowISO() })
       .eq("customer_id", data.customerId)
       .eq("sender_role", "customer")
       .neq("status", "seen");
@@ -409,7 +477,6 @@ export const markAdminSeen = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---- Unread count ----
 export const chatUnreadCount = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -438,7 +505,6 @@ export const chatUnreadCount = createServerFn({ method: "GET" })
     }
   });
 
-// ---- Admin: সব কাস্টমার (chat শুরু করার জন্য) ----
 export const listAllCustomers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

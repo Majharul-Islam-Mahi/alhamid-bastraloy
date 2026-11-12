@@ -56,10 +56,11 @@ function Settings() {
     setBusy(true);
     try {
       const path = await uploadShopImage(file);
-      const { error } = await supabase
-        .from("shop_settings")
-        .update({ [field]: path })
-        .eq("id", 1);
+      const patch = { [field]: path } as {
+        owner_photo_path?: string | null;
+        shop_photo_path?: string | null;
+      };
+      const { error } = await supabase.from("shop_settings").update(patch).eq("id", 1);
       if (error) throw error;
       toast.success("ছবি আপডেট হয়েছে");
       qc.invalidateQueries({ queryKey: ["shop-settings"] });
@@ -81,10 +82,11 @@ function Settings() {
     if (!ok) return;
 
     setBusy(true);
-    const { error } = await supabase
-      .from("shop_settings")
-      .update({ [field]: null })
-      .eq("id", 1);
+    const patch = { [field]: null } as {
+      owner_photo_path?: string | null;
+      shop_photo_path?: string | null;
+    };
+    const { error } = await supabase.from("shop_settings").update(patch).eq("id", 1);
     setBusy(false);
     if (error) {
       toast.error("মুছা যায়নি");

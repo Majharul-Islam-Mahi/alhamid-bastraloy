@@ -1,10 +1,14 @@
 // src/hooks/use-chat-notification.ts
 // নতুন chat message এলে sound + toast notification
+//
+// 🐛 FIX: toastAction object identity change → useEffect প্রতি render এ re-fire
+// 🐛 FIX: throttle — rapid message flow এ toast spam prevent (5s window)
+// 🐛 FIX: initial mount এ lastCountRef properly initialized
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 /**
- * Simple notification sound — Web Audio API দিয়ে
+ * Simple notification sound — Web Audio API
  * Browser কে external file লাগে না
  */
 function playNotificationSound() {
@@ -15,8 +19,6 @@ function playNotificationSound() {
     if (!AudioContextClass) return;
 
     const ctx = new AudioContextClass();
-
-    // Two-tone bell: C5 → E5
     const now = ctx.currentTime;
 
     const playNote = (freq: number, start: number, duration: number) => {
@@ -36,7 +38,6 @@ function playNotificationSound() {
     playNote(523.25, 0, 0.15); // C5
     playNote(659.25, 0.1, 0.2); // E5
 
-    // Close context after sound
     setTimeout(() => {
       ctx.close().catch(() => {});
     }, 500);
@@ -56,6 +57,8 @@ type Options = {
   toastAction?: { label: string; onClick: () => void };
 };
 
+const TOAST_THROTTLE_MS = 5000;
+
 /**
  * নতুন message এলে sound + toast দেখায়
  * আগের count track করে — শুধু নতুন বাড়লে trigger হয়
@@ -67,9 +70,16 @@ export function useChatNotification({
   toastAction,
 }: Options) {
   const lastCountRef = useRef<number>(-1);
+  const lastToastAtRef = useRef<number>(0);
+
+  // 🐛 toastAction কে ref এ রাখি — object identity change effect trigger করবে না
+  const toastActionRef = useRef(toastAction);
+  useEffect(() => {
+    toastActionRef.current = toastAction;
+  }, [toastAction]);
 
   useEffect(() => {
-    // First render এ skip
+    // First render এ skip — previous value সেট করি
     if (lastCountRef.current === -1) {
       lastCountRef.current = unreadCount;
       return;
@@ -81,20 +91,27 @@ export function useChatNotification({
     if (unreadCount > prev && enabled) {
       const newMessages = unreadCount - prev;
 
-      // Sound
+      // Sound — all new messages এ
       playNotificationSound();
 
-      // Toast
-      if (toastOnNew) {
+      // Toast — throttle (5s window)
+      const now = Date.now();
+      const canShowToast = toastOnNew && now - lastToastAtRef.current >= TOAST_THROTTLE_MS;
+
+      if (canShowToast) {
+        lastToastAtRef.current = now;
+
         const message =
           newMessages === 1 ? "নতুন ১টি message এসেছে" : `নতুন ${newMessages}টি message এসেছে`;
 
+        const action = toastActionRef.current;
+
         toast.info(message, {
           duration: 6000,
-          action: toastAction
+          action: action
             ? {
-                label: toastAction.label,
-                onClick: toastAction.onClick,
+                label: action.label,
+                onClick: action.onClick,
               }
             : undefined,
         });
@@ -102,5 +119,5 @@ export function useChatNotification({
     }
 
     lastCountRef.current = unreadCount;
-  }, [unreadCount, enabled, toastOnNew, toastAction]);
+  }, [unreadCount, enabled, toastOnNew]);
 }

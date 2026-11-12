@@ -1,10 +1,20 @@
 // src/routes/index.tsx
 // হোমপেজ — দোকানের তথ্য, ছবি, বর্ণনা ও পাশে লগইন প্যানেল
-// [REDESIGNED] mobile premium hero + centered login panel + better grid
+// [UPDATED] Hero logo: /logo-hero.png with "আ" fallback
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
-import { MapPin, Phone, User, Camera, ImagePlus, Store, Clock, Shield } from "lucide-react";
+import {
+  MapPin,
+  Phone,
+  User,
+  Camera,
+  ImagePlus,
+  Store,
+  Clock,
+  Shield,
+} from "lucide-react";
 import { SiteHeader } from "@/components/shop/SiteHeader";
 import { Footer } from "@/components/shop/Footer";
 import { LoginForm } from "@/components/shop/LoginForm";
@@ -40,7 +50,13 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-function UploadBtn({ onFile, label }: { onFile: (f: File) => void; label: string }) {
+function UploadBtn({
+  onFile,
+  label,
+}: {
+  onFile: (f: File) => void;
+  label: string;
+}) {
   return (
     <label className="no-print inline-flex cursor-pointer items-center gap-1 rounded-full bg-card/90 px-3 py-1.5 text-xs font-medium text-primary shadow-soft hover:bg-card">
       <Camera className="h-3.5 w-3.5" /> {label}
@@ -58,13 +74,22 @@ function Home() {
   const { data: me } = useMe();
   const { data: s } = useShopSettings();
   const qc = useQueryClient();
+  const [heroLogoError, setHeroLogoError] = useState(false);
 
-  async function setImage(field: "owner_photo_path" | "shop_photo_path" | "gallery", f: File) {
+  async function setImage(
+    field: "owner_photo_path" | "shop_photo_path" | "gallery",
+    f: File,
+  ) {
     try {
       const path = await uploadShopImage(f);
       const update =
-        field === "gallery" ? { gallery: [...(s?.galleryPaths ?? []), path] } : { [field]: path };
-      const { error } = await supabase.from("shop_settings").update(update).eq("id", 1);
+        field === "gallery"
+          ? { gallery: [...(s?.galleryPaths ?? []), path] }
+          : { [field]: path };
+      const { error } = await supabase
+        .from("shop_settings")
+        .update(update)
+        .eq("id", 1);
       if (error) throw error;
       toast.success("ছবি আপডেট হয়েছে");
       qc.invalidateQueries({ queryKey: ["shop-settings"] });
@@ -109,6 +134,33 @@ function Home() {
         <div className="relative mx-auto grid max-w-7xl gap-6 px-4 py-8 md:gap-10 md:py-16 lg:grid-cols-[1fr_420px] lg:py-20">
           {/* ---- Left: brand info ---- */}
           <div className="text-center lg:text-left" style={{ color: "#f8f3ea" }}>
+            {/* Hero Logo — /logo-hero.png না থাকলে "আ" */}
+            <div className="mb-4 flex justify-center lg:justify-start">
+              <div
+                className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full shadow-lg md:h-20 md:w-20"
+                style={{
+                  background: "linear-gradient(135deg, #d9a85a 0%, #b57f38 100%)",
+                  color: "#2e1c12",
+                }}
+              >
+                {!heroLogoError ? (
+                  <img
+                    src="/logo-hero.png"
+                    alt={SHOP.name}
+                    className="h-full w-full object-cover"
+                    onError={() => setHeroLogoError(true)}
+                  />
+                ) : (
+                  <span
+                    className="text-3xl md:text-4xl"
+                    style={{ fontFamily: "'Tiro Bangla', serif" }}
+                  >
+                    আ
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Bismillah chip */}
             <div className="mb-4 flex justify-center lg:justify-start">
               <span
@@ -142,7 +194,10 @@ function Home() {
                 className="flex items-center gap-1.5 text-sm md:text-base"
                 style={{ color: "#e8dcc8" }}
               >
-                <MapPin className="h-4 w-4 shrink-0" style={{ color: "#d9a85a" }} />
+                <MapPin
+                  className="h-4 w-4 shrink-0"
+                  style={{ color: "#d9a85a" }}
+                />
                 {SHOP.address}
               </span>
             </div>
@@ -158,9 +213,18 @@ function Home() {
 
             {/* Feature chips */}
             <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
-              <FeatureChip icon={<Store className="h-3.5 w-3.5" />} label="পাইকারি ও খুচরা" />
-              <FeatureChip icon={<Clock className="h-3.5 w-3.5" />} label="সকাল ৯টা — রাত ৯টা" />
-              <FeatureChip icon={<Shield className="h-3.5 w-3.5" />} label="বিশ্বস্ত সেবা" />
+              <FeatureChip
+                icon={<Store className="h-3.5 w-3.5" />}
+                label="পাইকারি ও খুচরা"
+              />
+              <FeatureChip
+                icon={<Clock className="h-3.5 w-3.5" />}
+                label="সকাল ৯টা — রাত ৯টা"
+              />
+              <FeatureChip
+                icon={<Shield className="h-3.5 w-3.5" />}
+                label="বিশ্বস্ত সেবা"
+              />
             </div>
 
             {me?.isOwner && (
@@ -181,34 +245,50 @@ function Home() {
                   <div
                     className="mx-auto flex h-14 w-14 items-center justify-center rounded-full"
                     style={{
-                      background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
+                      background:
+                        "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
                       color: "#f8f3ea",
                     }}
                   >
                     <User className="h-7 w-7" />
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">স্বাগতম</p>
-                  <p className="font-display text-2xl text-primary">{me.full_name}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    স্বাগতম
+                  </p>
+                  <p className="font-display text-2xl text-primary">
+                    {me.full_name}
+                  </p>
                   <a
                     href={me.isStaff ? "/admin" : "/account"}
                     className="mt-5 inline-block rounded-lg px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition hover:brightness-110"
                     style={{
-                      background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
+                      background:
+                        "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
                     }}
                   >
-                    {me.isStaff ? "ড্যাশবোর্ডে যান →" : "আমার হিসাব দেখুন →"}
+                    {me.isStaff
+                      ? "ড্যাশবোর্ডে যান →"
+                      : "আমার হিসাব দেখুন →"}
                   </a>
                 </div>
               ) : (
                 <>
                   <div className="mb-4 text-center">
-                    <h2 className="font-display text-xl text-primary md:text-2xl">লগইন করুন</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">নিরাপদ ২-ধাপ verification</p>
+                    <h2 className="font-display text-xl text-primary md:text-2xl">
+                      লগইন করুন
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      নিরাপদ ২-ধাপ verification
+                    </p>
                   </div>
                   <Tabs defaultValue="customer">
                     <TabsList className="mb-4 grid h-11 w-full grid-cols-2">
-                      <TabsTrigger value="customer">কাস্টমার</TabsTrigger>
-                      <TabsTrigger value="staff">অ্যাডমিন</TabsTrigger>
+                      <TabsTrigger value="customer">
+                        কাস্টমার
+                      </TabsTrigger>
+                      <TabsTrigger value="staff">
+                        অ্যাডমিন
+                      </TabsTrigger>
                     </TabsList>
                     <TabsContent value="customer">
                       <LoginForm mode="customer" compact />
@@ -250,10 +330,16 @@ function Home() {
           </div>
           {me?.isOwner && (
             <div className="mt-3 text-center">
-              <UploadBtn label="মালিকের ছবি" onFile={(f) => setImage("owner_photo_path", f)} />
+              <UploadBtn
+                label="মালিকের ছবি"
+                onFile={(f) => setImage("owner_photo_path", f)}
+              />
             </div>
           )}
-          <p className="mt-4 text-center text-xs md:text-sm" style={{ color: "#7a6558" }}>
+          <p
+            className="mt-4 text-center text-xs md:text-sm"
+            style={{ color: "#7a6558" }}
+          >
             প্রোপ্রাইটর
           </p>
           <p
@@ -272,9 +358,21 @@ function Home() {
 
         {/* Info cards */}
         <div className="grid gap-4 sm:grid-cols-2 md:gap-5 lg:col-span-2">
-          <InfoCard icon={<User />} title="ম্যানেজার" lines={[SHOP.manager, SHOP.managerPhone]} />
-          <InfoCard icon={<Phone />} title="যোগাযোগ" lines={SHOP.ownerPhones} />
-          <InfoCard icon={<MapPin />} title="ঠিকানা" lines={[SHOP.address]} />
+          <InfoCard
+            icon={<User />}
+            title="ম্যানেজার"
+            lines={[SHOP.manager, SHOP.managerPhone]}
+          />
+          <InfoCard
+            icon={<Phone />}
+            title="যোগাযোগ"
+            lines={SHOP.ownerPhones}
+          />
+          <InfoCard
+            icon={<MapPin />}
+            title="ঠিকানা"
+            lines={[SHOP.address]}
+          />
           <InfoCard
             icon={<ImagePlus />}
             title="আমাদের পণ্য"
@@ -297,7 +395,10 @@ function Home() {
               দোকান ও কাপড়ের ছবি
             </h2>
             {me?.isOwner && (
-              <UploadBtn label="নতুন ছবি যোগ" onFile={(f) => setImage("gallery", f)} />
+              <UploadBtn
+                label="নতুন ছবি যোগ"
+                onFile={(f) => setImage("gallery", f)}
+              />
             )}
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
@@ -321,7 +422,13 @@ function Home() {
 }
 
 // ---- Feature chip ----
-function FeatureChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+function FeatureChip({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
@@ -363,7 +470,11 @@ function InfoCard({
           {title}
         </p>
         {lines.map((l) => (
-          <p key={l} className="text-sm font-semibold md:text-base" style={{ color: "#3a2318" }}>
+          <p
+            key={l}
+            className="text-sm font-semibold md:text-base"
+            style={{ color: "#3a2318" }}
+          >
             {l}
           </p>
         ))}

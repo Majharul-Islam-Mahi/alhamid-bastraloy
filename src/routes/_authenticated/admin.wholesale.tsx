@@ -1,13 +1,16 @@
 // src/routes/_authenticated/admin.wholesale.tsx
 // পাইকারি পাওনা খাতা — কাস্টমার তালিকা
-// [FIXED] C001 serial format, Bengali digit search, better form UX
+//
+// 🐛 FIX: N+1 query storm → partiesDueBatch
+// 🐛 FIX: Client-side serial → server RPC next_serial (race-safe)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Search, UserPlus, HandCoins, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
-import { partyDue } from "@/lib/ledger";
+import { partiesDueBatch } from "@/lib/ledger";
+import { fetchNextSerial } from "@/lib/serial";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -27,18 +30,6 @@ type Party = {
   mobile: string | null;
   address: string | null;
 };
-
-// ✅ FIX: C001 format (handles both old "001" and new "C001")
-function suggestNextSerial(existing: string[]): string {
-  const nums = existing
-    .map((s) => {
-      const m = s.match(/^C?(\d+)$/i);
-      return m && m[1] ? parseInt(m[1], 10) : NaN;
-    })
-    .filter((n) => !isNaN(n));
-  const max = nums.length ? Math.max(...nums) : 0;
-  return `C${String(max + 1).padStart(3, "0")}`;
-}
 
 function Wholesale() {
   const qc = useQueryClient();
@@ -64,21 +55,13 @@ function Wholesale() {
       ).data ?? []) as Party[],
   });
 
+  // 🚀 BATCH: 2 queries total
   const { data: dues = {} } = useQuery({
-    queryKey: ["party-dues", parties.map((p) => p.id).join(",")],
+    queryKey: ["party-dues-wholesale-batch", parties.length],
     enabled: parties.length > 0,
-    queryFn: async () => {
-      const out: Record<string, number> = {};
-      await Promise.all(
-        parties.map(async (p) => {
-          out[p.id] = await partyDue(p.id);
-        }),
-      );
-      return out;
-    },
+    queryFn: () => partiesDueBatch(parties.map((p) => p.id)),
   });
 
-  // ✅ FIX: Bengali digit normalization
   const filtered = parties.filter((p) => {
     const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
@@ -97,7 +80,8 @@ function Wholesale() {
     }
     setBusy(true);
     try {
-      const next = suggestNextSerial(parties.map((p) => p.serial));
+      // 🐛 RACE-SAFE: server RPC
+      const next = await fetchNextSerial("wholesale");
       const { error } = await supabase.from("parties").insert({
         serial: next,
         kind: "wholesale",
@@ -173,7 +157,7 @@ function Wholesale() {
             }}
           />
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            সিরিয়াল: C001, C002, ... (Auto)
+            সিরিয়াল: C001, C002, ... (server-side RPC — race-safe)
           </p>
           <div className="sm:col-span-2">
             <Button variant="coffee" onClick={addParty} disabled={busy}>

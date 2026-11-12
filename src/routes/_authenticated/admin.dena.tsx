@@ -1,12 +1,15 @@
 // src/routes/_authenticated/admin.dena.tsx
 // দেনা খাতা — সাপ্লায়ারদের তালিকা
-// [UPDATED] S001 format, Bengali digit search
+//
+// 🐛 FIX: N+1 dues calculation (single query per party) → suppliersDueBatch (2-4 queries)
+// 🐛 FIX: fetchNextSerial server RPC (already race-safe, no change needed)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Search, UserPlus, Truck, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
+import { suppliersDueBatch } from "@/lib/ledger";
 import { fetchNextSerial } from "@/lib/serial";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
@@ -49,18 +52,11 @@ function Dena() {
       ).data ?? []) as Party[],
   });
 
+  // 🚀 BATCH: suppliersDueBatch (1 query per 200-chunk)
   const { data: dues = {} } = useQuery({
-    queryKey: ["supplier-dues", parties.map((p) => p.id).join(",")],
+    queryKey: ["supplier-dues-batch", parties.length],
     enabled: parties.length > 0,
-    queryFn: async () => {
-      const { data } = await supabase.from("supplier_entries").select("party_id,kind,amount");
-      const out: Record<string, number> = {};
-      for (const e of data ?? []) {
-        out[e.party_id] =
-          (out[e.party_id] ?? 0) + (e.kind === "purchase" ? Number(e.amount) : -Number(e.amount));
-      }
-      return out;
-    },
+    queryFn: () => suppliersDueBatch(parties.map((p) => p.id)),
   });
 
   const filtered = parties.filter((p) => {
@@ -81,7 +77,7 @@ function Dena() {
     }
     setBusy(true);
     try {
-      // ✅ RPC call — S001 format
+      // Server-side RPC (S001 format)
       const next = await fetchNextSerial("supplier");
 
       const { error } = await supabase.from("parties").insert({
@@ -96,12 +92,7 @@ function Dena() {
 
       toast.success(`নতুন সাপ্লায়ার যোগ হয়েছে — সিরিয়াল ${next}`);
       setShowAdd(false);
-      setForm({
-        shop_name: "",
-        owner_name: "",
-        mobile: "",
-        address: "",
-      });
+      setForm({ shop_name: "", owner_name: "", mobile: "", address: "" });
       qc.invalidateQueries({ queryKey: ["parties", "supplier"] });
     } catch (e) {
       toast.error("সংরক্ষণ হয়নি: " + (e as Error).message);
@@ -159,7 +150,7 @@ function Dena() {
             }}
           />
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            সিরিয়াল: S001, S002, ... (Auto-generate)
+            সিরিয়াল: S001, S002, ... (Auto-generate — server RPC)
           </p>
           <div className="sm:col-span-2">
             <Button variant="coffee" onClick={addParty} disabled={busy}>

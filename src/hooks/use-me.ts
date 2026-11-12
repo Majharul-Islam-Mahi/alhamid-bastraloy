@@ -1,3 +1,4 @@
+// src/hooks/use-me.ts
 // বর্তমান লগইন করা ইউজারের প্রোফাইল ও রোল
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +8,7 @@ export type Me = {
   full_name: string;
   mobile: string;
   serial: string | null;
+  avatar_path: string | null;
   roles: string[];
   isOwner: boolean;
   isStaff: boolean;
@@ -29,11 +31,16 @@ export function useMe() {
         full_name: prof?.full_name ?? "",
         mobile: prof?.mobile ?? "",
         serial: prof?.serial ?? null,
+        avatar_path: prof?.avatar_path ?? null,
         roles: r,
         isOwner: r.includes("owner"),
         isStaff: r.includes("owner") || r.includes("moderator"),
         isCustomer: r.includes("customer"),
       };
     },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }

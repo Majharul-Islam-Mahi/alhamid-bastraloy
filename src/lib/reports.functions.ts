@@ -129,7 +129,10 @@ export const updateReport = createServerFn({ method: "POST" })
       patch["replied_at"] = new Date().toISOString();
     }
 
-    const { error } = await supabaseAdmin.from("reports").update(patch).eq("id", data.reportId);
+    const { error } = await supabaseAdmin
+      .from("reports")
+      .update(patch as never)
+      .eq("id", data.reportId);
 
     if (error) throw new Error("Report update হয়নি: " + error.message);
 

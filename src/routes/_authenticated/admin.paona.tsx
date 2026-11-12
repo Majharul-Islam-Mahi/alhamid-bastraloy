@@ -1,13 +1,16 @@
 // src/routes/_authenticated/admin.paona.tsx
 // খুচরা পাওনা খাতা — খুচরা কাস্টমারদের বাকির তালিকা
-// [FIXED] Bengali digit search, better form UX, R001 serial maintained
+//
+// 🐛 FIX: N+1 query storm (Promise.all partyDue) → partiesDueBatch (2 queries)
+// 🐛 FIX: Client-side serial suggestNextSerial → server RPC next_serial (race-safe)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Search, ReceiptText, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, toBnDigits, normalizeMobile, toEnDigits } from "@/lib/shop";
-import { partyDue } from "@/lib/ledger";
+import { partiesDueBatch } from "@/lib/ledger";
+import { fetchNextSerial } from "@/lib/serial";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -52,21 +55,14 @@ function Paona() {
       ).data ?? []) as Party[],
   });
 
+  // 🚀 BATCH: 2 queries total (regardless of party count)
   const { data: dues = {} } = useQuery({
-    queryKey: ["party-dues-retail", parties.map((p) => p.id).join(",")],
+    queryKey: ["party-dues-retail-batch", parties.length],
     enabled: parties.length > 0,
-    queryFn: async () => {
-      const out: Record<string, number> = {};
-      await Promise.all(
-        parties.map(async (p) => {
-          out[p.id] = await partyDue(p.id);
-        }),
-      );
-      return out;
-    },
+    queryFn: () => partiesDueBatch(parties.map((p) => p.id)),
   });
 
-  // ✅ FIX: Bengali digit normalization
+  // ✅ Bengali digit normalization
   const filtered = parties.filter((p) => {
     const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
@@ -78,18 +74,6 @@ function Paona() {
     );
   });
 
-  // Retail serial: R001, R002 ...
-  function suggestNextRetailSerial(existing: string[]): string {
-    const nums = existing
-      .map((s) => {
-        const m = s.match(/^R(\d+)$/i);
-        return m && m[1] ? parseInt(m[1], 10) : 0;
-      })
-      .filter((n) => !isNaN(n));
-    const max = nums.length ? Math.max(...nums) : 0;
-    return `R${String(max + 1).padStart(3, "0")}`;
-  }
-
   async function addRetailCustomer() {
     if (!form.shop_name.trim()) {
       toast.error("নাম দিন");
@@ -97,7 +81,8 @@ function Paona() {
     }
     setBusy(true);
     try {
-      const nextSerial = suggestNextRetailSerial(parties.map((p) => p.serial));
+      // 🐛 RACE-SAFE: server-side RPC (next_serial), not client-side calculation
+      const nextSerial = await fetchNextSerial("retail");
       const { error } = await supabase.from("parties").insert({
         kind: "retail",
         serial: nextSerial,
@@ -174,7 +159,7 @@ function Paona() {
             }}
           />
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            সিরিয়াল auto: R001, R002, R003 ... (login ID নেই, শুধু tracking)
+            সিরিয়াল auto: R001, R002, R003 ... (server-side RPC — race-safe)
           </p>
           <div className="sm:col-span-2">
             <Button variant="coffee" onClick={addRetailCustomer} disabled={busy}>

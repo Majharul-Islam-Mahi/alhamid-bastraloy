@@ -66,7 +66,7 @@ export async function logAction(input: AuditLogInput): Promise<void> {
       target_type: input.targetType ?? null,
       target_id: input.targetId ?? null,
       target_name: input.targetName ?? null,
-      details: input.details ?? null,
+      details: (input.details ?? null) as never,
     });
   } catch (e) {
     // Audit log fail হলেও main action fail হবে না

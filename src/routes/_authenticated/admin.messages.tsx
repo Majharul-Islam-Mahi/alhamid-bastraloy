@@ -1,36 +1,23 @@
 // src/routes/_authenticated/admin.messages.tsx
-// Admin chat — WhatsApp-style with file upload, message info
-// [FIX] ssr: false — prevents SSR error
-
+// Admin chat — voice, file, avatar, message info
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, useMemo } from "react";
-import {
-  MessageCircle,
-  RefreshCw,
-  Search,
-  Plus,
-  X,
-  Bell,
-  BellOff,
-} from "lucide-react";
+import { MessageCircle, RefreshCw, Search, Plus, X, Bell, BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
-import {
-  ChatBubble,
-  ChatDateDivider,
-  ChatEmpty,
-  MessageInfoDialog,
-} from "@/components/chat/ChatBubble";
+import { ChatBubble, ChatDateDivider, ChatEmpty, MessageInfoDialog } from "@/components/chat/ChatBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listConversations,
   getConversation,
   sendAdminMessage,
   sendAdminFile,
+  sendAdminVoice,
   markAdminSeen,
   chatUnreadCount,
   listAllCustomers,
@@ -55,6 +42,7 @@ type Conversation = {
   shop_name: string;
   mobile: string;
   serial: string | null;
+  avatar_path: string | null;
 };
 
 type Message = {
@@ -71,6 +59,7 @@ type Message = {
   file_name?: string | null;
   file_size?: number | null;
   mime_type?: string | null;
+  duration_seconds?: number | null;
   delivered_at?: string | null;
   seen_at?: string | null;
 };
@@ -91,6 +80,7 @@ function AdminMessages() {
   const fetchConv = useServerFn(getConversation);
   const sendMsg = useServerFn(sendAdminMessage);
   const sendFile = useServerFn(sendAdminFile);
+  const sendVoice = useServerFn(sendAdminVoice);
   const markSeen = useServerFn(markAdminSeen);
   const fetchAllCustomers = useServerFn(listAllCustomers);
   const fetchUnread = useServerFn(chatUnreadCount);
@@ -112,9 +102,7 @@ function AdminMessages() {
   function toggleSound() {
     const v = !soundEnabled;
     setSoundEnabled(v);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("chat_sound_enabled", String(v));
-    }
+    if (typeof window !== "undefined") localStorage.setItem("chat_sound_enabled", String(v));
     toast.success(v ? "Sound চালু" : "Sound বন্ধ");
   }
 
@@ -177,24 +165,17 @@ function AdminMessages() {
     refetchInterval: 5000,
   });
 
-  const messages = useMemo(
-    () => (chatData?.messages ?? []) as Message[],
-    [chatData],
-  );
+  const messages = useMemo(() => (chatData?.messages ?? []) as Message[], [chatData]);
   const customer = chatData?.customer;
   const party = chatData?.party;
 
-  // Auto scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // Auto mark seen
   useEffect(() => {
     if (!selected) return;
-    if (
-      messages.some((m) => m.sender_role === "customer" && m.status !== "seen")
-    ) {
+    if (messages.some((m) => m.sender_role === "customer" && m.status !== "seen")) {
       markSeen({ data: { customerId: selected } })
         .then(() => {
           qc.invalidateQueries({ queryKey: ["admin-chat", selected] });
@@ -205,29 +186,22 @@ function AdminMessages() {
     }
   }, [messages, selected, markSeen, qc]);
 
-  // Fetch signed URLs
   useEffect(() => {
     const fileMsgs = messages.filter((m) => m.file_path);
     if (fileMsgs.length === 0) return;
-
     let cancelled = false;
     (async () => {
       const map: Record<string, string> = {};
       await Promise.all(
         fileMsgs.map(async (m) => {
           if (!m.file_path) return;
-          const { data } = await supabase.storage
-            .from("chat-files")
-            .createSignedUrl(m.file_path, 3600);
+          const { data } = await supabase.storage.from("chat-files").createSignedUrl(m.file_path, 3600);
           if (data?.signedUrl) map[m.id] = data.signedUrl;
         }),
       );
       if (!cancelled) setSignedMap(map);
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [messages]);
 
   async function handleSend(msg: string) {
@@ -247,15 +221,10 @@ function AdminMessages() {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) throw new Error("লগইন নেই");
-
     const ext = file.name.split(".").pop() || "bin";
     const path = `admin/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-    const { error: upErr } = await supabase.storage
-      .from("chat-files")
-      .upload(path, file, { upsert: false });
+    const { error: upErr } = await supabase.storage.from("chat-files").upload(path, file, { upsert: false });
     if (upErr) throw new Error("Upload ব্যর্থ: " + upErr.message);
-
     try {
       await sendFile({
         data: {
@@ -275,6 +244,36 @@ function AdminMessages() {
     }
   }
 
+  async function handleSendVoice(blob: Blob, durationSec: number) {
+    if (!selected) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) throw new Error("লগইন নেই");
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    const path = `admin/${userId}/voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("chat-files")
+      .upload(path, blob, { upsert: false, contentType: blob.type });
+    if (upErr) throw new Error("Voice upload ব্যর্থ: " + upErr.message);
+    try {
+      await sendVoice({
+        data: {
+          customerId: selected,
+          filePath: path,
+          fileSize: blob.size,
+          mimeType: blob.type,
+          durationSeconds: durationSec,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["admin-chat", selected] });
+      qc.invalidateQueries({ queryKey: ["admin-conversations"] });
+      toast.success(`Voice message পাঠানো হয়েছে (${durationSec}s)`);
+    } catch (e) {
+      await supabase.storage.from("chat-files").remove([path]);
+      throw e;
+    }
+  }
+
   const filteredConvs = conversations.filter((c) => {
     const s = search.trim().toLowerCase();
     if (!s) return true;
@@ -286,7 +285,6 @@ function AdminMessages() {
     );
   });
 
-  // Group by date
   const groups: { date: string; msgs: Message[] }[] = [];
   let lastDate = "";
   for (const m of messages) {
@@ -298,16 +296,15 @@ function AdminMessages() {
     groups[groups.length - 1]?.msgs.push(m);
   }
 
+  const selectedConv = conversations.find((c) => c.customer_id === selected);
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-1 md:px-0">
-      {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin" />
         <div className="flex items-center gap-2">
           <MessageCircle className="h-6 w-6 text-primary md:h-7 md:w-7" />
-          <h1 className="font-display text-2xl text-primary md:text-3xl">
-            Messages
-          </h1>
+          <h1 className="font-display text-2xl text-primary md:text-3xl">Messages</h1>
           {totalUnread > 0 && (
             <span className="rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-destructive-foreground">
               {toBnDigits(totalUnread)} নতুন
@@ -315,51 +312,26 @@ function AdminMessages() {
           )}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleSound}
-            title={soundEnabled ? "Sound বন্ধ" : "Sound চালু"}
-          >
-            {soundEnabled ? (
-              <Bell className="h-3.5 w-3.5 text-primary" />
-            ) : (
-              <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
+          <Button variant="outline" size="sm" onClick={toggleSound} title={soundEnabled ? "Sound বন্ধ" : "Sound চালু"}>
+            {soundEnabled ? <Bell className="h-3.5 w-3.5 text-primary" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
           </Button>
           <Button
             variant={showNew ? "outline" : "coffee"}
             size="sm"
-            onClick={() => {
-              setShowNew((v) => !v);
-              setCustomerSearch("");
-            }}
+            onClick={() => { setShowNew((v) => !v); setCustomerSearch(""); }}
           >
-            {showNew ? (
-              <X className="h-3.5 w-3.5" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
+            {showNew ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             {showNew ? "বাতিল" : "নতুন চ্যাট"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              qc.invalidateQueries({ queryKey: ["admin-conversations"] })
-            }
-          >
+          <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["admin-conversations"] })}>
             <RefreshCw className="h-3.5 w-3.5" /> রিফ্রেশ
           </Button>
         </div>
       </div>
 
-      {/* New chat panel */}
       {showNew && (
         <div className="rounded-2xl border-2 border-primary/30 bg-card p-4 shadow-card">
-          <p className="mb-3 text-sm font-semibold text-primary">
-            কার সাথে কথা বলতে চান?
-          </p>
+          <p className="mb-3 text-sm font-semibold text-primary">কার সাথে কথা বলতে চান?</p>
           <input
             autoFocus
             value={customerSearch}
@@ -368,9 +340,7 @@ function AdminMessages() {
             className="mb-3 h-10 w-full rounded-lg border bg-background px-3 text-sm"
           />
           {filteredCustomers.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              কোনো কাস্টমার পাওয়া যায়নি
-            </p>
+            <p className="py-4 text-center text-sm text-muted-foreground">কোনো কাস্টমার পাওয়া যায়নি</p>
           ) : (
             <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 md:grid-cols-3">
               {filteredCustomers.slice(0, 40).map((c) => (
@@ -388,22 +358,11 @@ function AdminMessages() {
                   disabled={!c.user_id}
                   className="flex items-center gap-2 rounded-lg border bg-background p-2 text-left transition hover:border-primary hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                    style={{
-                      backgroundColor: "rgba(201,146,74,0.2)",
-                      color: "#4a2f1e",
-                    }}
-                  >
-                    {c.shop_name?.charAt(0) || "?"}
-                  </span>
+                  <UserAvatar path={null} name={c.shop_name || "?"} size={36} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold">
-                      {c.shop_name}
-                    </p>
+                    <p className="truncate text-xs font-semibold">{c.shop_name}</p>
                     <p className="truncate text-[10px] text-muted-foreground">
-                      {toBnDigits(c.serial)}
-                      {c.mobile && ` · ${toBnDigits(c.mobile)}`}
+                      {toBnDigits(c.serial)}{c.mobile && ` · ${toBnDigits(c.mobile)}`}
                     </p>
                   </div>
                 </button>
@@ -413,16 +372,10 @@ function AdminMessages() {
         </div>
       )}
 
-      {/* Two-panel layout */}
-      <div
-        className="grid gap-4 md:grid-cols-[320px_1fr]"
-        style={{ minHeight: "70vh" }}
-      >
+      <div className="grid gap-4 md:grid-cols-[320px_1fr]" style={{ minHeight: "70vh" }}>
         {/* LEFT: Conversation list */}
         <div
-          className={`overflow-hidden rounded-2xl border bg-card shadow-card ${
-            selected ? "hidden md:block" : ""
-          }`}
+          className={`overflow-hidden rounded-2xl border bg-card shadow-card ${selected ? "hidden md:block" : ""}`}
           style={{ borderColor: "#dbcbb2" }}
         >
           <div className="border-b p-3" style={{ borderColor: "#dbcbb2" }}>
@@ -439,9 +392,7 @@ function AdminMessages() {
 
           <div className="max-h-[60vh] overflow-y-auto">
             {filteredConvs.length === 0 ? (
-              <p className="p-8 text-center text-sm text-muted-foreground">
-                কোনো conversation নেই
-              </p>
+              <p className="p-8 text-center text-sm text-muted-foreground">কোনো conversation নেই</p>
             ) : (
               filteredConvs.map((c) => (
                 <button
@@ -453,23 +404,15 @@ function AdminMessages() {
                   style={{ borderColor: "#eadfcc" }}
                 >
                   <div className="flex items-start gap-3">
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-                      style={{
-                        backgroundColor: "rgba(201,146,74,0.2)",
-                        color: "#4a2f1e",
-                      }}
-                    >
-                      {c.shop_name?.charAt(0) ||
-                        c.full_name?.charAt(0) ||
-                        "?"}
-                    </div>
+                    {/* 🎨 Avatar */}
+                    <UserAvatar
+                      path={c.avatar_path}
+                      name={c.shop_name || c.full_name || "?"}
+                      size={40}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <p
-                          className="truncate text-sm font-semibold"
-                          style={{ color: "#3a2318" }}
-                        >
+                        <p className="truncate text-sm font-semibold" style={{ color: "#3a2318" }}>
                           {c.shop_name || c.full_name}
                         </p>
                         {c.unread > 0 && (
@@ -478,24 +421,14 @@ function AdminMessages() {
                           </span>
                         )}
                       </div>
-                      <p
-                        className="mt-0.5 truncate text-xs"
-                        style={{ color: "#7a6558" }}
-                      >
+                      <p className="mt-0.5 truncate text-xs" style={{ color: "#7a6558" }}>
                         {c.last_type === "call" && "📞 "}
+                        {c.last_type === "voice" && "🎤 "}
                         {c.last_from === "admin" && "আপনি: "}
                         {c.last_message}
                       </p>
-                      <p
-                        className="mt-0.5 text-[10px]"
-                        style={{ color: "#8a7a6a" }}
-                      >
-                        {new Date(c.last_at).toLocaleString("bn-BD", {
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <p className="mt-0.5 text-[10px]" style={{ color: "#8a7a6a" }}>
+                        {new Date(c.last_at).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>
@@ -507,69 +440,38 @@ function AdminMessages() {
 
         {/* RIGHT: Chat area */}
         <div
-          className={`flex flex-col overflow-hidden rounded-2xl border shadow-card ${
-            !selected ? "hidden md:flex" : ""
-          }`}
+          className={`flex flex-col overflow-hidden rounded-2xl border shadow-card ${!selected ? "hidden md:flex" : ""}`}
           style={{ borderColor: "#dbcbb2", backgroundColor: "#efeae2" }}
         >
           {!selected ? (
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-full"
-                style={{ backgroundColor: "rgba(201,146,74,0.15)" }}
-              >
-                <MessageCircle
-                  className="h-7 w-7"
-                  style={{ color: "#c9924a" }}
-                />
+              <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(201,146,74,0.15)" }}>
+                <MessageCircle className="h-7 w-7" style={{ color: "#c9924a" }} />
               </div>
-              <p
-                className="mt-3 text-sm font-semibold"
-                style={{ color: "#3a2318" }}
-              >
+              <p className="mt-3 text-sm font-semibold" style={{ color: "#3a2318" }}>
                 বাম দিক থেকে customer select করুন
               </p>
-              <p className="mt-1 text-xs" style={{ color: "#7a6558" }}>
-                অথবা "নতুন চ্যাট" চেপে শুরু করুন
-              </p>
+              <p className="mt-1 text-xs" style={{ color: "#7a6558" }}>অথবা "নতুন চ্যাট" চেপে শুরু করুন</p>
             </div>
           ) : (
             <>
-              <div
-                className="flex items-center gap-3 border-b bg-card p-3"
-                style={{ borderColor: "#dbcbb2" }}
-              >
-                <button
-                  onClick={() => setSelected(null)}
-                  className="rounded-full p-1 text-muted-foreground hover:bg-accent md:hidden"
-                >
+              {/* 🎨 Chat header with avatar */}
+              <div className="flex items-center gap-3 border-b bg-card p-3" style={{ borderColor: "#dbcbb2" }}>
+                <button onClick={() => setSelected(null)} className="rounded-full p-1 text-muted-foreground hover:bg-accent md:hidden">
                   ←
                 </button>
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
-                    color: "#f8f3ea",
-                  }}
-                >
-                  {party?.shop_name?.charAt(0) ||
-                    customer?.full_name?.charAt(0) ||
-                    "?"}
-                </div>
+                <UserAvatar
+                  path={selectedConv?.avatar_path ?? customer?.avatar_path ?? null}
+                  name={party?.shop_name || customer?.full_name || "?"}
+                  size={44}
+                  borderColor="#c9924a"
+                />
                 <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate text-sm font-semibold"
-                    style={{ color: "#3a2318" }}
-                  >
+                  <p className="truncate text-sm font-semibold" style={{ color: "#3a2318" }}>
                     {party?.shop_name || customer?.full_name || "Customer"}
                   </p>
-                  <p
-                    className="truncate text-[11px]"
-                    style={{ color: "#2d7a4f" }}
-                  >
-                    ● অনলাইন
-                    {customer?.mobile && ` · ${toBnDigits(customer.mobile)}`}
+                  <p className="truncate text-[11px]" style={{ color: "#2d7a4f" }}>
+                    ● অনলাইন{customer?.mobile && ` · ${toBnDigits(customer.mobile)}`}
                   </p>
                 </div>
               </div>
@@ -585,9 +487,7 @@ function AdminMessages() {
                 }}
               >
                 {chatLoading ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    লোড হচ্ছে…
-                  </p>
+                  <p className="py-8 text-center text-sm text-muted-foreground">লোড হচ্ছে…</p>
                 ) : messages.length === 0 ? (
                   <ChatEmpty />
                 ) : (
@@ -613,6 +513,7 @@ function AdminMessages() {
               <ChatInput
                 onSend={handleSend}
                 onSendFile={handleSendFile}
+                onSendVoice={handleSendVoice}
                 placeholder="উত্তর লিখুন…"
               />
             </>
@@ -620,13 +521,8 @@ function AdminMessages() {
         </div>
       </div>
 
-      {/* Message Info dialog */}
       {infoMsg && (
-        <MessageInfoDialog
-          msg={infoMsg as never}
-          isMine={infoMsg.sender_role === "admin"}
-          onClose={() => setInfoMsg(null)}
-        />
+        <MessageInfoDialog msg={infoMsg as never} isMine={infoMsg.sender_role === "admin"} onClose={() => setInfoMsg(null)} />
       )}
     </div>
   );

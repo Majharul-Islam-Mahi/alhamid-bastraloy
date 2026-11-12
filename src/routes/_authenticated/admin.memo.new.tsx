@@ -1,21 +1,15 @@
 // src/routes/_authenticated/admin.memo.new.tsx
-// নতুন মেমো — 3 ধরনের + unit conversion
+// নতুন মেমো
+//
+// 🐛 FIX: Retail_serial mode এ কোনো customer না থাকলে misleading
+// 🐛 FIX: Product name field না দেখলে category+price দিয়ে memo বানানোর চেষ্টা
+// 🐛 FIX: Auto-fallback to category name when product name empty
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
-  Plus,
-  Trash2,
-  CheckCircle2,
-  X,
-  FileText,
-  Search,
-  User as UserIcon,
-  AlertTriangle,
-  PackagePlus,
-  Store,
-  Users,
-  UserPlus,
+  Plus, Trash2, CheckCircle2, X, FileText, Search, User as UserIcon,
+  AlertTriangle, PackagePlus, Store, Users, UserPlus, Info,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { taka, toBnDigits, num, todayISO, toEnDigits, SHOP } from "@/lib/shop";
@@ -87,7 +81,6 @@ function emptyItem(): Item {
 function NewMemo() {
   const nav = useNavigate();
   const qc = useQueryClient();
-
   const [memoType, setMemoType] = useState<MemoType>("wholesale");
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,16 +102,13 @@ function NewMemo() {
 
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
-  // ---- Data ----
   const { data: products = [] } = useQuery({
     queryKey: ["products-all"],
     queryFn: async () =>
       ((
         await supabase
           .from("products")
-          .select(
-            "id,name,quantity,unit,unit_price,category_id,subcategory_id,base_unit,unit_conversions",
-          )
+          .select("id,name,quantity,unit,unit_price,category_id,subcategory_id,base_unit,unit_conversions")
           .order("name")
       ).data ?? []) as Product[],
   });
@@ -169,9 +159,7 @@ function NewMemo() {
         const mob = (p.mobile ?? "").replace(/\D/g, "");
         const qDigits = q.replace(/\D/g, "");
         return (
-          shop.includes(q) ||
-          owner.includes(q) ||
-          serial.includes(q) ||
+          shop.includes(q) || owner.includes(q) || serial.includes(q) ||
           (qDigits && mob.includes(qDigits))
         );
       })
@@ -233,7 +221,6 @@ function NewMemo() {
     setItems((arr) => arr.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   }
 
-  // ✅ Product name → auto-fill: cat, sub, unit, price
   function onItemNameChange(key: string, name: string) {
     const match = products.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
     if (match) {
@@ -253,7 +240,18 @@ function NewMemo() {
     }
   }
 
-  // Selected product for an item
+  // 🐛 Category select → auto-fill name if empty (from category label)
+  function onCategoryChange(key: string, catId: string) {
+    const it = items.find((i) => i.key === key);
+    if (!it) return;
+    const patch: Partial<Item> = { catId, subId: "" };
+    // If name is empty, pre-fill from category
+    if (!it.name.trim() && catId) {
+      patch.name = catLabel(catId);
+    }
+    updateItem(key, patch);
+  }
+
   function productForItem(it: Item): Product | undefined {
     if (!it.product_id) return undefined;
     return products.find((p) => p.id === it.product_id);
@@ -263,14 +261,10 @@ function NewMemo() {
   const paidNum = num(paid);
   const due = total - paidNum;
 
-  // ---- Save ----
   async function saveMemo(confirmIt: boolean) {
-    // Validation
     if (memoType === "wholesale" || memoType === "retail_serial") {
       if (!partyId) {
-        toast.error(
-          memoType === "wholesale" ? "পাইকারি কাস্টমার select করুন" : "খুচরা কাস্টমার select করুন",
-        );
+        toast.error(memoType === "wholesale" ? "পাইকারি কাস্টমার select করুন" : "খুচরা কাস্টমার select করুন");
         return;
       }
     }
@@ -286,93 +280,16 @@ function NewMemo() {
     }
     const validItems = items.filter((i) => i.name.trim());
     if (validItems.length === 0) {
-      toast.error("অন্তত একটা পণ্য দিন");
+      toast.error("অন্তত একটা পণ্য দিন — 'পণ্যের নাম' field এ product টাইপ করুন");
       return;
     }
 
     setBusy(true);
+    const createdProductIds: string[] = [];
+    let memoId: string | null = null;
+    const newStockItems: string[] = [];
+
     try {
-      // STEP 1: Confirm — stock auto-add + conversion calculate
-      const preparedItems = validItems.map((it) => {
-        const prod = products.find((p) => p.id === it.product_id);
-        const baseQty = prod
-          ? toBaseQty(
-              num(it.quantity),
-              it.unit,
-              prod.base_unit || prod.unit || "পিস",
-              prod.unit_conversions,
-            )
-          : num(it.quantity);
-        return { ...it, baseQty };
-      });
-
-      const newStockItems: string[] = [];
-      const insertItems: {
-        name: string;
-        quantity: number;
-        unit: string;
-        price: number;
-        product_id: string | null;
-        base_quantity: number;
-      }[] = [];
-
-      if (confirmIt) {
-        for (let i = 0; i < preparedItems.length; i++) {
-          const it = preparedItems[i];
-          if (!it.product_id) {
-            const baseUnit = it.unit || "পিস";
-            const { data: newProd, error } = await supabase
-              .from("products")
-              .insert({
-                name: it.name.trim(),
-                quantity: num(it.quantity),
-                unit: baseUnit,
-                base_unit: baseUnit,
-                unit_price: num(it.price),
-                category_id: it.catId || null,
-                subcategory_id: it.subId || null,
-              })
-              .select("id")
-              .single();
-
-            if (error) {
-              throw new Error(`"${it.name}" stock এ যোগ হয়নি: ${error.message}`);
-            }
-            insertItems.push({
-              name: it.name.trim(),
-              quantity: num(it.quantity),
-              unit: it.unit,
-              price: num(it.price),
-              product_id: newProd.id,
-              base_quantity: num(it.quantity),
-            });
-            newStockItems.push(it.name);
-          } else {
-            insertItems.push({
-              name: it.name.trim(),
-              quantity: num(it.quantity),
-              unit: it.unit,
-              price: num(it.price),
-              product_id: it.product_id,
-              base_quantity: it.baseQty,
-            });
-          }
-        }
-      } else {
-        // Pending — base_quantity store without product creation
-        for (const it of preparedItems) {
-          insertItems.push({
-            name: it.name.trim(),
-            quantity: num(it.quantity),
-            unit: it.unit,
-            price: num(it.price),
-            product_id: it.product_id,
-            base_quantity: it.baseQty,
-          });
-        }
-      }
-
-      // STEP 2: Memo create
       const { data: memo, error: e1 } = await supabase
         .from("memos")
         .insert({
@@ -394,35 +311,82 @@ function NewMemo() {
         .single();
 
       if (e1 || !memo) throw new Error(e1?.message ?? "মেমো তৈরি হয়নি");
+      memoId = memo.id;
 
-      // STEP 3: Memo items
-      const { error: e2 } = await supabase.from("memo_items").insert(
-        insertItems.map((i, idx) => ({
+      const insertItems: {
+        memo_id: string;
+        position: number;
+        name: string;
+        quantity: number;
+        unit: string;
+        price: number;
+        product_id: string | null;
+        base_quantity: number;
+      }[] = [];
+
+      for (let i = 0; i < validItems.length; i++) {
+        const it = validItems[i]!;
+        let productId = it.product_id;
+        let baseQty: number;
+        const prod = products.find((p) => p.id === it.product_id);
+
+        if (confirmIt && !productId) {
+          const baseUnit = it.unit || "পিস";
+          const { data: newProd, error: eP } = await supabase
+            .from("products")
+            .insert({
+              name: it.name.trim(),
+              quantity: num(it.quantity),
+              unit: baseUnit,
+              base_unit: baseUnit,
+              unit_price: num(it.price),
+              category_id: it.catId || null,
+              subcategory_id: it.subId || null,
+            })
+            .select("id")
+            .single();
+
+          if (eP || !newProd) throw new Error(`"${it.name}" stock এ যোগ হয়নি: ${eP?.message ?? "unknown"}`);
+          productId = newProd.id;
+          baseQty = num(it.quantity);
+          createdProductIds.push(newProd.id);
+          newStockItems.push(it.name);
+
+          // Log initial stock movement
+          await supabase.from("stock_movements").insert({
+            product_id: newProd.id,
+            movement_type: "in",
+            quantity: num(it.quantity),
+            reason: "memo_create",
+            note: "মেমো থেকে প্রাথমিক স্টক",
+          });
+        } else {
+          baseQty = prod
+            ? toBaseQty(num(it.quantity), it.unit, prod.base_unit || prod.unit || "পিস", prod.unit_conversions)
+            : num(it.quantity);
+        }
+
+        insertItems.push({
           memo_id: memo.id,
-          position: idx,
-          name: i.name,
-          quantity: i.quantity,
-          unit: i.unit,
-          price: i.price,
-          product_id: i.product_id,
-          base_quantity: i.base_quantity,
-        })),
-      );
+          position: i,
+          name: it.name.trim(),
+          quantity: num(it.quantity),
+          unit: it.unit || "পিস",
+          price: num(it.price),
+          product_id: productId,
+          base_quantity: baseQty,
+        });
+      }
+
+      const { error: e2 } = await supabase.from("memo_items").insert(insertItems);
       if (e2) throw new Error("আইটেম সেভ হয়নি: " + e2.message);
 
-      // STEP 4: Confirm
       if (confirmIt) {
-        const { data: memoNo, error: e3 } = await supabase.rpc("confirm_memo", {
-          _memo_id: memo.id,
-        });
+        const { data: memoNo, error: e3 } = await supabase.rpc("confirm_memo", { _memo_id: memoId });
         if (e3) throw new Error("কনফার্ম হয়নি: " + e3.message);
-
         const memoNoDisplay = `M${String(memoNo).padStart(3, "0")}`;
-
         if (newStockItems.length > 0) {
-          toast.success(
-            `${memoNoDisplay} কনফার্ম — ${newStockItems.length} টি নতুন পণ্য stock এ যোগ + deduct হয়েছে`,
-          );
+          toast.success(`${memoNoDisplay} কনফার্ম — ${toBnDigits(newStockItems.length)} নতুন পণ্য stock এ যোগ + deduct`);
         } else {
           toast.success(`${memoNoDisplay} কনফার্ম হয়েছে — স্টক কমেছে`);
         }
@@ -432,17 +396,24 @@ function NewMemo() {
 
       qc.invalidateQueries({ queryKey: ["memos-list"] });
       qc.invalidateQueries({ queryKey: ["memos-pending-count"] });
+      qc.invalidateQueries({ queryKey: ["memos-split-view"] });
       qc.invalidateQueries({ queryKey: ["day-entries"] });
       qc.invalidateQueries({ queryKey: ["day-summary"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["products-all"] });
 
       if (confirmIt) {
-        nav({ to: "/admin/memo/$id", params: { id: memo.id } });
+        nav({ to: "/admin/memo/$id", params: { id: memoId } });
       } else {
         nav({ to: "/admin/memo" });
       }
     } catch (e) {
+      for (const pid of createdProductIds) {
+        try { await supabase.from("products").delete().eq("id", pid); } catch { /* ignore */ }
+      }
+      if (memoId) {
+        try { await supabase.from("memos").delete().eq("id", memoId); } catch { /* ignore */ }
+      }
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
@@ -451,7 +422,6 @@ function NewMemo() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 md:space-y-5">
-      {/* Toolbar */}
       <div className="no-print flex flex-wrap items-center gap-2 md:gap-3">
         <BackButton fallback="/admin/memo" />
         <h1 className="font-display text-xl text-primary md:text-2xl">নতুন মেমো</h1>
@@ -460,12 +430,11 @@ function NewMemo() {
             <FileText className="h-4 w-4" /> Pending
           </Button>
           <Button variant="coffee" size="sm" onClick={() => saveMemo(true)} disabled={busy}>
-            <CheckCircle2 className="h-4 w-4" /> কনফার্ম
+            <CheckCircle2 className="h-4 w-4" /> {busy ? "সেভ হচ্ছে…" : "কনফার্ম"}
           </Button>
         </div>
       </div>
 
-      {/* Type Selector */}
       <div className="no-print rounded-2xl border-2 border-primary/20 bg-card p-2 shadow-card">
         <div className="grid grid-cols-3 gap-1">
           <TypeBtn
@@ -492,19 +461,12 @@ function NewMemo() {
         </div>
       </div>
 
-      {/* Header card */}
       <div className="print-area rounded-2xl border bg-card p-5 shadow-card md:p-6">
         <div className="text-center">
-          <p
-            className="text-sm md:text-base"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#8a6a45" }}
-          >
+          <p className="text-sm md:text-base" style={{ fontFamily: "'Tiro Bangla', serif", color: "#8a6a45" }}>
             {SHOP.bismillah}
           </p>
-          <h1
-            className="mt-1 text-2xl text-primary md:text-3xl"
-            style={{ fontFamily: "'Tiro Bangla', serif" }}
-          >
+          <h1 className="mt-1 text-2xl text-primary md:text-3xl" style={{ fontFamily: "'Tiro Bangla', serif" }}>
             {SHOP.name}
           </h1>
           <p className="text-xs text-muted-foreground md:text-sm">{SHOP.address}</p>
@@ -521,26 +483,33 @@ function NewMemo() {
             />
           </label>
 
+          {/* 🐛 FIX: Empty state for retail_serial */}
+          {memoType === "retail_serial" && allParties.length === 0 && (
+            <div className="sm:col-span-2 rounded-xl border-2 border-yellow-500 bg-yellow-50 p-3">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 shrink-0 text-yellow-700 mt-0.5" />
+                <div className="text-xs text-yellow-800">
+                  <p className="font-semibold">কোনো খুচরা কাস্টমার নেই</p>
+                  <p className="mt-1">
+                    "খুচরা নতুন" tab ব্যবহার করুন (serial ছাড়াই memo করা যাবে), অথবা{" "}
+                    <a href="/admin/paona" className="underline">/admin/paona</a> এ গিয়ে খুচরা কাস্টমার যোগ করুন।
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {(memoType === "wholesale" || memoType === "retail_serial") && (
             <div className="relative sm:col-span-2" ref={searchWrapRef}>
               <label className="text-sm">
-                {memoType === "wholesale"
-                  ? "পাইকারি কাস্টমার (C001 / নাম / মোবাইল)"
-                  : "খুচরা কাস্টমার (R001 / নাম / মোবাইল)"}
+                {memoType === "wholesale" ? "পাইকারি কাস্টমার" : "খুচরা কাস্টমার"} (সিরিয়াল / নাম / মোবাইল)
                 <div className="relative mt-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
                     value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setShowSuggestions(true);
-                    }}
+                    onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
                     onFocus={() => setShowSuggestions(true)}
-                    placeholder={
-                      memoType === "wholesale"
-                        ? "C001 / করিম স্টোর / 01716782247"
-                        : "R001 / বাবুল / 01700000003"
-                    }
+                    placeholder={memoType === "wholesale" ? "C001 / নাম / মোবাইল" : "R001 / নাম / মোবাইল"}
                     className="h-10 w-full rounded-md border bg-background pl-9 pr-9"
                   />
                   {searchQuery && (
@@ -548,7 +517,6 @@ function NewMemo() {
                       type="button"
                       onClick={clearParty}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"
-                      title="মুছুন"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -566,13 +534,7 @@ function NewMemo() {
                       className="flex w-full items-center gap-3 border-b p-3 text-left transition last:border-0 hover:bg-accent/10"
                       style={{ borderColor: "#eadfcc" }}
                     >
-                      <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                        style={{
-                          backgroundColor: "rgba(201,146,74,0.2)",
-                          color: "#4a2f1e",
-                        }}
-                      >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(201,146,74,0.2)", color: "#4a2f1e" }}>
                         <UserIcon className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -594,35 +556,11 @@ function NewMemo() {
             <>
               <label className="text-sm">
                 দোকানের নাম
-                <input
-                  value={shopName}
-                  readOnly
-                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
-                />
-              </label>
-              <label className="text-sm">
-                মালিকের নাম
-                <input
-                  value={ownerName}
-                  readOnly
-                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
-                />
+                <input value={shopName} readOnly className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3" />
               </label>
               <label className="text-sm">
                 মোবাইল
-                <input
-                  value={mobile}
-                  readOnly
-                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3 tabular-nums"
-                />
-              </label>
-              <label className="text-sm">
-                ঠিকানা
-                <input
-                  value={address}
-                  readOnly
-                  className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3"
-                />
+                <input value={mobile} readOnly className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3 tabular-nums" />
               </label>
               <p className="text-xs text-muted-foreground sm:col-span-2">
                 🎯 সিরিয়াল: <strong className="text-primary">{toBnDigits(partySerial)}</strong>
@@ -632,11 +570,6 @@ function NewMemo() {
 
           {memoType === "retail_manual" && (
             <>
-              <div className="sm:col-span-2 rounded-xl border-l-4 border-accent bg-accent/5 p-3 text-xs">
-                <p style={{ color: "#3a2318" }}>
-                  <strong>খুচরা নতুন কাস্টমার</strong> — serial নেই। শুধু নাম + mobile লিখুন।
-                </p>
-              </div>
               <label className="text-sm">
                 কাস্টমারের নাম *
                 <input
@@ -667,7 +600,6 @@ function NewMemo() {
         )}
       </div>
 
-      {/* Items */}
       <div className="print-area space-y-3 rounded-2xl border bg-card p-3 shadow-card md:p-4">
         {items.map((it, idx) => {
           const prod = productForItem(it);
@@ -681,39 +613,26 @@ function NewMemo() {
           const datalistId = `products-dl-${it.key}`;
 
           const nameTyped = it.name.trim().length > 0;
+          const nameEmptyButCat = !nameTyped && !!it.catId;
           const notInStock = nameTyped && !it.product_id;
 
           const hint = conversionHint(num(it.quantity), it.unit, baseUnit, conversions);
 
           return (
-            <div key={it.key} className="rounded-xl border-2 border-border bg-background p-3">
-              {/* Row 1: # + Category + Sub + Delete */}
+            <div key={it.key} className={`rounded-xl border-2 bg-background p-3 ${nameEmptyButCat ? "border-yellow-500" : "border-border"}`}>
               <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                  style={{
-                    backgroundColor: "rgba(201,146,74,0.2)",
-                    color: "#4a2f1e",
-                  }}
-                >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: "rgba(201,146,74,0.2)", color: "#4a2f1e" }}>
                   {toBnDigits(idx + 1)}
                 </span>
 
                 <select
                   value={it.catId}
-                  onChange={(e) =>
-                    updateItem(it.key, {
-                      catId: e.target.value,
-                      subId: "",
-                    })
-                  }
+                  onChange={(e) => onCategoryChange(it.key, e.target.value)}
                   className="h-9 min-w-30 flex-1 rounded-md border bg-card px-2 text-xs sm:text-sm"
                 >
                   <option value="">সব ক্যাটাগরি</option>
                   {parents.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name_bn || c.name}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name_bn || c.name}</option>
                   ))}
                 </select>
 
@@ -724,18 +643,11 @@ function NewMemo() {
                   className="h-9 min-w-30 flex-1 rounded-md border bg-card px-2 text-xs disabled:opacity-50 sm:text-sm"
                 >
                   <option value="">
-                    {!it.catId
-                      ? "সাব-ক্যাটাগরি"
-                      : childrenOf(it.catId).length === 0
-                        ? "সাব নেই"
-                        : "সব সাব"}
+                    {!it.catId ? "সাব-ক্যাটাগরি" : childrenOf(it.catId).length === 0 ? "সাব নেই" : "সব সাব"}
                   </option>
-                  {it.catId &&
-                    childrenOf(it.catId).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name_bn || c.name}
-                      </option>
-                    ))}
+                  {it.catId && childrenOf(it.catId).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name_bn || c.name}</option>
+                  ))}
                 </select>
 
                 <button
@@ -748,16 +660,16 @@ function NewMemo() {
                 </button>
               </div>
 
-              {/* Row 2: Product name */}
               <div className="mt-2">
                 <input
                   value={it.name}
                   onChange={(e) => onItemNameChange(it.key, e.target.value)}
                   list={datalistId}
                   className={`h-10 w-full rounded-md border bg-card px-3 text-sm outline-none focus:border-primary ${
+                    nameEmptyButCat ? "border-yellow-500 bg-yellow-50/40" :
                     notInStock ? "border-yellow-500 bg-yellow-50/40" : ""
                   }`}
-                  placeholder="পণ্যের নাম লিখুন (স্টক থেকে suggestion আসবে)…"
+                  placeholder="👉 পণ্যের নাম টাইপ করুন (স্টক থেকে suggestion আসবে)"
                 />
                 <datalist id={datalistId}>
                   {products.map((p) => (
@@ -768,12 +680,13 @@ function NewMemo() {
                 </datalist>
               </div>
 
-              {it.product_id && (
-                <p className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-success">
-                  ✓ Stock এ আছে — স্টক: {toBnDigits(prod?.quantity ?? 0)} {baseUnit}
-                  {it.catId && catLabel(it.catId) && ` · ${catLabel(it.catId)}`}
-                  {it.subId && catLabel(it.subId) && ` → ${catLabel(it.subId)}`}
-                </p>
+              {nameEmptyButCat && (
+                <div className="mt-1 flex items-start gap-1.5 rounded-md border-l-2 border-yellow-500 bg-yellow-50/60 px-2 py-1 text-[10px] text-yellow-800">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    <strong>পণ্যের নাম লিখুন</strong> — শুধু category select করলে memo save হবে না
+                  </span>
+                </div>
               )}
 
               {notInStock && (
@@ -786,7 +699,13 @@ function NewMemo() {
                 </div>
               )}
 
-              {/* Row 3: Unit / Qty / Price / Total */}
+              {it.product_id && (
+                <p className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-success">
+                  ✓ Stock এ আছে — স্টক: {toBnDigits(prod?.quantity ?? 0)} {baseUnit}
+                  {it.catId && catLabel(it.catId) && ` · ${catLabel(it.catId)}`}
+                </p>
+              )}
+
               <div className="mt-2 grid grid-cols-[1fr_1fr_1.2fr_auto] gap-2">
                 <label className="text-[10px] text-muted-foreground">
                   একক
@@ -796,9 +715,7 @@ function NewMemo() {
                     className="mt-0.5 block h-9 w-full rounded-md border bg-card px-2 text-sm outline-none focus:border-primary"
                   >
                     {availableUnits.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
+                      <option key={u} value={u}>{u}</option>
                     ))}
                   </select>
                 </label>
@@ -828,19 +745,15 @@ function NewMemo() {
                 </div>
               </div>
 
-              {/* Conversion hint */}
               {hint && (
                 <p className="mt-1 rounded-md bg-accent/10 px-2 py-1 text-[10px] text-primary">
-                  💡 {hint} — stock থেকে{" "}
-                  {toBnDigits(toBaseQty(num(it.quantity), it.unit, baseUnit, conversions))}{" "}
-                  {baseUnit} কাটবে
+                  💡 {hint}
                 </p>
               )}
             </div>
           );
         })}
 
-        {/* Total footer */}
         <div className="flex items-center justify-between rounded-xl bg-gradient-coffee px-4 py-3 text-primary-foreground">
           <span className="text-sm font-semibold">সর্বমোট</span>
           <span className="font-display text-xl font-bold tabular-nums">{taka(total)}</span>
@@ -853,7 +766,6 @@ function NewMemo() {
         </div>
       </div>
 
-      {/* জমা + নোট */}
       <div className="rounded-2xl border bg-card p-4 shadow-card md:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
@@ -876,15 +788,9 @@ function NewMemo() {
           </label>
         </div>
         <div className="mt-4 grid gap-2 rounded-lg bg-accent/10 p-3 text-sm sm:grid-cols-3">
-          <p>
-            মোট: <strong>{taka(total)}</strong>
-          </p>
-          <p>
-            জমা: <strong className="text-success">{taka(paidNum)}</strong>
-          </p>
-          <p>
-            বাকি: <strong className="text-destructive">{taka(due)}</strong>
-          </p>
+          <p>মোট: <strong>{taka(total)}</strong></p>
+          <p>জমা: <strong className="text-success">{taka(paidNum)}</strong></p>
+          <p>বাকি: <strong className="text-destructive">{taka(due)}</strong></p>
         </div>
       </div>
     </div>
@@ -892,11 +798,7 @@ function NewMemo() {
 }
 
 function TypeBtn({
-  active,
-  onClick,
-  icon,
-  label,
-  sub,
+  active, onClick, icon, label, sub,
 }: {
   active: boolean;
   onClick: () => void;
@@ -909,20 +811,11 @@ function TypeBtn({
       type="button"
       onClick={onClick}
       className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-        active
-          ? "bg-primary text-primary-foreground shadow"
-          : "bg-background text-foreground hover:bg-accent/10"
+        active ? "bg-primary text-primary-foreground shadow" : "bg-background text-foreground hover:bg-accent/10"
       }`}
     >
-      <span className="flex items-center gap-1.5">
-        {icon}
-        {label}
-      </span>
-      <span
-        className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}
-      >
-        {sub}
-      </span>
+      <span className="flex items-center gap-1.5">{icon}{label}</span>
+      <span className={`text-[10px] ${active ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{sub}</span>
     </button>
   );
 }

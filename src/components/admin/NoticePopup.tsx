@@ -1,5 +1,10 @@
 // src/components/admin/NoticePopup.tsx
 // ছোট notice popup — type-অনুযায়ী রঙ ও icon
+//
+// 🐛 FIX: 60s refetch এ notice object identity change হত
+// → useEffect([visible, notice]) fire করত → 30s timer reset হত
+// → notice কখনো auto-dismiss হত না
+// এখন: dependency তে notice.id ব্যবহার — object identity ignore
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
@@ -84,6 +89,8 @@ const TYPE_CONFIG: Record<
   },
 };
 
+const AUTO_DISMISS_MS = 30000;
+
 export function NoticePopup() {
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -109,34 +116,40 @@ export function NoticePopup() {
     refetchOnWindowFocus: true,
   });
 
+  // 🐛 notice object identity ignore — notice?.id দিয়ে trigger
+  const noticeId = notice?.id ?? null;
+
+  // Show timer — 500ms delay after new notice
   useEffect(() => {
-    if (notice && dismissed !== notice.id) {
+    if (noticeId && dismissed !== noticeId) {
       const t = setTimeout(() => setVisible(true), 500);
       return () => clearTimeout(t);
     } else {
       setVisible(false);
     }
-  }, [notice, dismissed]);
+  }, [noticeId, dismissed]);
 
+  // 🐛 Auto-dismiss — dependency তে noticeId (object না)
   useEffect(() => {
-    if (visible && notice) {
-      const t = setTimeout(() => setVisible(false), 30000);
+    if (visible && noticeId) {
+      const t = setTimeout(() => setVisible(false), AUTO_DISMISS_MS);
       return () => clearTimeout(t);
     }
-  }, [visible, notice]);
+    return undefined;
+  }, [visible, noticeId]);
 
   function close(e?: React.MouseEvent) {
     e?.stopPropagation();
-    if (notice) {
-      localStorage.setItem("admin_notice_dismissed", notice.id);
-      setDismissed(notice.id);
+    if (noticeId) {
+      localStorage.setItem("admin_notice_dismissed", noticeId);
+      setDismissed(noticeId);
     }
     setVisible(false);
   }
 
-  if (!notice || dismissed === notice.id) return null;
+  if (!notice || dismissed === noticeId) return null;
 
-  const cfg = TYPE_CONFIG[notice.notice_type] ?? TYPE_CONFIG.general;
+  const cfg = TYPE_CONFIG[notice.notice_type] ?? TYPE_CONFIG["general"]!;
 
   return (
     <div
@@ -217,7 +230,7 @@ export function NoticePopup() {
               className="h-full"
               style={{
                 background: "linear-gradient(90deg, #c9924a, #d9a85a)",
-                animation: "shrink 30s linear forwards",
+                animation: `shrink ${AUTO_DISMISS_MS}ms linear forwards`,
               }}
             />
           </div>

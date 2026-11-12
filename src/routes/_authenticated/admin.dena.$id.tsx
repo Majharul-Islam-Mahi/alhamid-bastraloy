@@ -1,5 +1,7 @@
 // src/routes/_authenticated/admin.dena.$id.tsx
 // সাপ্লায়ার লেজার — Tabs + Lazy load + summary cards
+//
+// 🐛 FIX: entries limit 2000 → 500 (view-optimized)
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -32,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/admin/dena/$id")({
 });
 
 const PAGE_SIZE = 50;
+const ENTRY_LIMIT = 500;
 
 function shiftDays(iso: string, d: number): string {
   const x = new Date(iso + "T00:00:00");
@@ -51,22 +54,15 @@ function SupplierPage() {
     date: todayISO(),
   });
 
-  // Date filter (optional)
   const [useDateFilter, setUseDateFilter] = useState(false);
   const [from, setFrom] = useState(shiftDays(todayISO(), -90));
   const [to, setTo] = useState(todayISO());
 
-  // Lazy load
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     setShowAdd(false);
-    setForm({
-      kind: "purchase",
-      amount: "",
-      details: "",
-      date: todayISO(),
-    });
+    setForm({ kind: "purchase", amount: "", details: "", date: todayISO() });
     setUseDateFilter(false);
     setFrom(shiftDays(todayISO(), -90));
     setTo(todayISO());
@@ -78,7 +74,7 @@ function SupplierPage() {
     queryFn: async () => (await supabase.from("parties").select("*").eq("id", id).single()).data,
   });
 
-  // ALL entries
+  // 🐛 entries: 500 limit (was 2000)
   const { data: allEntries = [] } = useQuery({
     queryKey: ["supplier-entries", id],
     queryFn: async () =>
@@ -89,17 +85,15 @@ function SupplierPage() {
           .eq("party_id", id)
           .order("entry_date", { ascending: false })
           .order("created_at", { ascending: false })
-          .limit(2000)
+          .limit(ENTRY_LIMIT)
       ).data ?? [],
   });
 
-  // Filter entries
   const filteredEntries = useMemo(() => {
     if (!useDateFilter) return allEntries;
     return allEntries.filter((e) => e.entry_date >= from && e.entry_date <= to);
   }, [allEntries, useDateFilter, from, to]);
 
-  // Opening balance (before from date)
   const { data: opening = 0 } = useQuery({
     queryKey: ["supplier-opening", id, from, useDateFilter],
     enabled: !!id && useDateFilter,
@@ -117,7 +111,6 @@ function SupplierPage() {
     },
   });
 
-  // Sort ascending for running balance
   const rowsAsc = useMemo(() => {
     return [...filteredEntries].sort((a, b) => {
       const da = a.entry_date + " " + a.created_at;
@@ -128,7 +121,6 @@ function SupplierPage() {
 
   const openingBalance = useDateFilter ? opening : 0;
 
-  // Compute running
   let running = openingBalance;
   const withRunning = rowsAsc.map((e) => {
     running += e.kind === "purchase" ? Number(e.amount) : -Number(e.amount);
@@ -143,7 +135,6 @@ function SupplierPage() {
     .filter((e) => e.kind === "payment")
     .reduce((s, e) => s + Number(e.amount), 0);
 
-  // Reverse for display (newest first)
   const displayRows = [...withRunning].reverse();
   const visibleRows = displayRows.slice(0, displayCount);
   const hasMore = displayCount < displayRows.length;
@@ -172,14 +163,9 @@ function SupplierPage() {
 
     toast.success(form.kind === "purchase" ? "মাল ক্রয় লেখা হয়েছে" : "টাকা দেওয়া লেখা হয়েছে");
     setShowAdd(false);
-    setForm({
-      kind: "purchase",
-      amount: "",
-      details: "",
-      date: todayISO(),
-    });
+    setForm({ kind: "purchase", amount: "", details: "", date: todayISO() });
     qc.invalidateQueries({ queryKey: ["supplier-entries", id] });
-    qc.invalidateQueries({ queryKey: ["supplier-dues"] });
+    qc.invalidateQueries({ queryKey: ["supplier-dues-batch"] });
     qc.invalidateQueries({ queryKey: ["supplier-opening"] });
   }
 
@@ -220,10 +206,7 @@ function SupplierPage() {
             </p>
             <h1
               className="mt-1 text-2xl md:text-3xl"
-              style={{
-                fontFamily: "'Tiro Bangla', serif",
-                color: "#f8f3ea",
-              }}
+              style={{ fontFamily: "'Tiro Bangla', serif", color: "#f8f3ea" }}
             >
               {party.shop_name}
             </h1>
@@ -239,17 +222,13 @@ function SupplierPage() {
             </p>
             <p
               className="text-2xl md:text-3xl"
-              style={{
-                fontFamily: "'Tiro Bangla', serif",
-                color: "#d9a85a",
-              }}
+              style={{ fontFamily: "'Tiro Bangla', serif", color: "#d9a85a" }}
             >
               {taka(totalDue)}
             </p>
           </div>
         </div>
 
-        {/* Lifetime chips */}
         <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
           <div className="rounded-lg bg-white/10 p-2 text-center">
             <p className="opacity-75">মোট ক্রয়</p>
@@ -327,7 +306,6 @@ function SupplierPage() {
 
         {/* ==================== TAB 1: LEDGER ==================== */}
         <TabsContent value="ledger" className="mt-4 space-y-4">
-          {/* Date filter (optional) */}
           <div className="no-print rounded-2xl border bg-card p-3 shadow-card">
             <button
               onClick={() => setUseDateFilter((v) => !v)}
@@ -404,7 +382,6 @@ function SupplierPage() {
             )}
           </div>
 
-          {/* Summary cards */}
           <div className="grid gap-3 sm:grid-cols-3">
             <SummaryCard
               icon={<TrendingUp className="h-4 w-4" />}
@@ -426,7 +403,6 @@ function SupplierPage() {
             />
           </div>
 
-          {/* Table */}
           <div className="overflow-hidden rounded-2xl border bg-card shadow-card print-area">
             <div className="no-print border-b bg-secondary/40 px-4 py-2 text-xs text-muted-foreground">
               {toBnDigits(displayRows.length)} টি এন্ট্রি — {toBnDigits(visibleRows.length)}{" "}
@@ -473,7 +449,6 @@ function SupplierPage() {
               </table>
             </div>
 
-            {/* Load more */}
             {hasMore && (
               <div className="no-print border-t bg-secondary/30 p-3 text-center">
                 <Button

@@ -36,6 +36,53 @@ export const Route = createFileRoute("/_authenticated/admin/import")({
 
 type ImportType = "parties" | "memos" | "day_entries" | "supplier_entries" | "hawlat_entries";
 
+// ---- Explicit row types (fixes Parameters<...> typing errors) ----
+type PartyImportRow = {
+  serial: string;
+  shop_name: string;
+  kind: "wholesale" | "retail" | "supplier" | "hawlat";
+  owner_name: string | null;
+  mobile: string | null;
+  address: string | null;
+};
+
+type MemoImportRow = {
+  memo_no: number | null;
+  memo_date: string;
+  party_serial: string | null;
+  shop_name: string;
+  owner_name: string | null;
+  mobile: string | null;
+  address: string | null;
+  total: number;
+  paid: number;
+};
+
+type DayEntryImportRow = {
+  entry_date: string;
+  kind: "cash_sale" | "expense" | "deposit" | "credit";
+  amount: number;
+  name: string | null;
+  details: string | null;
+  party_serial: string | null;
+};
+
+type SupplierImportRow = {
+  party_serial: string;
+  entry_date: string;
+  kind: "purchase" | "payment";
+  amount: number;
+  details: string | null;
+};
+
+type HawlatImportRow = {
+  party_serial: string;
+  entry_date: string;
+  kind: "give" | "receive";
+  amount: number;
+  note: string | null;
+};
+
 const TYPES: { key: ImportType; label: string }[] = [
   { key: "parties", label: "পার্টি" },
   { key: "memos", label: "মেমো" },
@@ -271,23 +318,23 @@ function ImportPage() {
       let res;
       if (importType === "parties") {
         res = await importParties({
-          data: { rows: rows as Parameters<typeof importParties>[0]["data"]["rows"] },
+          data: { rows: rows as PartyImportRow[] },
         });
       } else if (importType === "memos") {
         res = await importMemos({
-          data: { rows: rows as Parameters<typeof importMemos>[0]["data"]["rows"] },
+          data: { rows: rows as MemoImportRow[] },
         });
       } else if (importType === "day_entries") {
         res = await importDayEntries({
-          data: { rows: rows as Parameters<typeof importDayEntries>[0]["data"]["rows"] },
+          data: { rows: rows as DayEntryImportRow[] },
         });
       } else if (importType === "supplier_entries") {
         res = await importSupplierEntries({
-          data: { rows: rows as Parameters<typeof importSupplierEntries>[0]["data"]["rows"] },
+          data: { rows: rows as SupplierImportRow[] },
         });
       } else {
         res = await importHawlatEntries({
-          data: { rows: rows as Parameters<typeof importHawlatEntries>[0]["data"]["rows"] },
+          data: { rows: rows as HawlatImportRow[] },
         });
       }
       setResult(res);

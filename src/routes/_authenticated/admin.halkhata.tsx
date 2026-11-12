@@ -1,5 +1,9 @@
 // src/routes/_authenticated/admin.halkhata.tsx
 // নোটিশ ব্যবস্থাপনা — হালখাতা, ছাড়, জরুরি, অনুষ্ঠান সহ সব ধরনের + Back button
+//
+// 🐛 FIX: saveNotice-এ race condition ছিল
+// আগে: পুরানো notice deactivate → নতুন insert (insert fail হলে পুরানো হারিয়ে যেত)
+// এখন: নতুন insert আগে → সফল হলে পুরানো deactivate
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -139,26 +143,41 @@ function HalkhataPage() {
       return;
     }
     setBusy(true);
-    await supabase.from("notices").update({ active: false }).eq("active", true);
+    try {
+      // 🐛 FIX: নতুন insert আগে করি
+      const { data: inserted, error: insertErr } = await supabase
+        .from("notices")
+        .insert({
+          title: notice.title.trim(),
+          message: notice.message.trim(),
+          active: true,
+          expires_at: notice.expires_at || null,
+          notice_type: notice.notice_type,
+          priority: notice.priority,
+        })
+        .select("id")
+        .single();
 
-    const { error } = await supabase.from("notices").insert({
-      title: notice.title.trim(),
-      message: notice.message.trim(),
-      active: true,
-      expires_at: notice.expires_at || null,
-      notice_type: notice.notice_type,
-      priority: notice.priority,
-    });
-    setBusy(false);
-    if (error) {
-      toast.error("সংরক্ষণ হয়নি: " + error.message);
-      return;
+      if (insertErr) throw insertErr;
+
+      // Insert সফল হলে পুরানো notice deactivate
+      if (current && current.id !== inserted.id) {
+        await supabase.from("notices").update({ active: false }).eq("id", current.id);
+      }
+
+      toast.success("নোটিশ চালু হয়েছে — সবাই দেখবে ✅");
+      qc.invalidateQueries({ queryKey: ["active-notice"] });
+      qc.invalidateQueries({ queryKey: ["admin-notice-popup"] });
+      qc.invalidateQueries({ queryKey: ["customer-notice-banner"] });
+    } catch (e) {
+      toast.error("সংরক্ষণ হয়নি: " + (e as Error).message);
+    } finally {
+      setBusy(false);
     }
-    toast.success("নোটিশ চালু হয়েছে — সবাই দেখবে ✅");
-    qc.invalidateQueries({ queryKey: ["active-notice"] });
   }
 
   async function deactivate() {
+    if (!current) return;
     const ok = await confirmDialog({
       title: "নোটিশ বন্ধ করবেন?",
       message: "এই নোটিশটি সব কাস্টমার আর দেখতে পাবে না। আপনি পরে আবার চালু করতে পারবেন।",
@@ -168,10 +187,19 @@ function HalkhataPage() {
     });
     if (!ok) return;
     setBusy(true);
-    await supabase.from("notices").update({ active: false }).eq("active", true);
+    const { error } = await supabase
+      .from("notices")
+      .update({ active: false })
+      .eq("id", current.id);
     setBusy(false);
+    if (error) {
+      toast.error("বন্ধ করা যায়নি: " + error.message);
+      return;
+    }
     toast.success("নোটিশ বন্ধ হয়েছে");
     qc.invalidateQueries({ queryKey: ["active-notice"] });
+    qc.invalidateQueries({ queryKey: ["admin-notice-popup"] });
+    qc.invalidateQueries({ queryKey: ["customer-notice-banner"] });
   }
 
   function waMessage(name?: string) {
@@ -218,7 +246,7 @@ function HalkhataPage() {
               <p className="text-sm font-semibold text-primary">✅ নোটিশ চালু আছে</p>
               <p className="mt-1 text-xs text-muted-foreground">{current.title}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={deactivate}>
+            <Button variant="outline" size="sm" onClick={deactivate} disabled={busy}>
               <Trash2 /> বন্ধ করুন
             </Button>
           </div>
@@ -305,7 +333,7 @@ function HalkhataPage() {
           </div>
 
           <Button variant="coffee" onClick={saveNotice} disabled={busy}>
-            <Save /> {current ? "আপডেট করুন" : "নোটিশ চালু করুন"}
+            <Save /> {busy ? "সংরক্ষণ হচ্ছে…" : current ? "আপডেট করুন" : "নোটিশ চালু করুন"}
           </Button>
         </div>
       </section>

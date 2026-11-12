@@ -9,7 +9,7 @@ type LogOptions = {
   url?: string;
   userId?: string;
   severity?: "error" | "warning" | "info";
-  context?: Record<string, unknown>;
+  context?: Record<string, unknown> | null;
 };
 
 let errorQueue: LogOptions[] = [];
@@ -33,7 +33,7 @@ async function flush() {
         user_id: e.userId ?? userId ?? null,
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
         severity: e.severity ?? "error",
-        context: e.context ?? null,
+        context: (e.context ?? null) as never,
       })),
     );
 

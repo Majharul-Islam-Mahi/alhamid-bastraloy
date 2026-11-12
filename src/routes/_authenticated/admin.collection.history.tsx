@@ -1,5 +1,8 @@
 // src/routes/_authenticated/admin.collection.history.tsx
 // কালেকশনের ইতিহাস — কে কবে কোথায় কত টাকা collect করলো
+//
+// 🐛 FIX: .in("collection_id", [...300+ ids]) — URL length limit hit করত (414 error)
+// এখন: 200-item chunks এ divide করে query
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -35,6 +38,8 @@ type CollectionItem = {
   amount: number;
 };
 
+const CHUNK_SIZE = 200;
+
 function CollectionHistory() {
   const [from, setFrom] = useState(() => {
     const d = new Date();
@@ -58,20 +63,31 @@ function CollectionHistory() {
       ).data ?? ([] as Collection[]),
   });
 
+  // 🐛 Chunked fetch — URL length limit এড়াতে
   const { data: items = [] } = useQuery({
-    queryKey: ["collection-items-history", collections.map((c) => c.id)],
+    queryKey: ["collection-items-history", collections.map((c) => c.id).join(",")],
     enabled: collections.length > 0,
-    queryFn: async () =>
-      (
-        await supabase
+    queryFn: async () => {
+      const ids = collections.map((c) => c.id);
+      const all: CollectionItem[] = [];
+
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const { data, error } = await supabase
           .from("collection_items")
           .select("*")
-          .in(
-            "collection_id",
-            collections.map((c) => c.id),
-          )
-          .order("created_at")
-      ).data ?? ([] as CollectionItem[]),
+          .in("collection_id", chunk)
+          .order("created_at");
+
+        if (error) {
+          console.error(`[collection-history] chunk ${i} failed:`, error.message);
+          continue;
+        }
+        all.push(...((data ?? []) as CollectionItem[]));
+      }
+
+      return all;
+    },
   });
 
   function itemsOf(cid: string) {
@@ -223,6 +239,17 @@ function CollectionHistory() {
                           </td>
                         </tr>
                       ))}
+                      {cItems.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-3 py-4 text-center text-xs"
+                            style={{ color: "#7a6558" }}
+                          >
+                            লোড হচ্ছে…
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                   {c.notes && (

@@ -1,7 +1,10 @@
 // src/components/shop/SiteHeader.tsx
 // পাবলিক হেডার মেনু — desktop + mobile responsive + Chat icon
+//
+// 🐛 FIX: Logout এর পরে UI refresh হয় না (race condition with onAuthStateChange)
+//       Hard reload সবচেয়ে reliable
 import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { LogOut, LayoutDashboard, Menu, X, Home, UserCircle, MessageCircle } from "lucide-react";
@@ -13,10 +16,9 @@ import { chatUnreadCount } from "@/lib/chat.functions";
 export function SiteHeader() {
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
-  // Chat unread — logged in users only
   const fetchChatUnread = useServerFn(chatUnreadCount);
   const { data: chatData } = useQuery({
     queryKey: ["chat-unread-count"],
@@ -27,11 +29,16 @@ export function SiteHeader() {
   const chatUnread = chatData?.count ?? 0;
 
   async function logout() {
-    await qc.cancelQueries();
-    qc.clear();
-    await supabase.auth.signOut();
+    // 🐛 FIX: Hard reload ensures clean state (no stale cache, no race condition)
     setOpen(false);
-    navigate({ to: "/", replace: true });
+    try {
+      await qc.cancelQueries();
+      qc.clear();
+      await supabase.auth.signOut();
+    } catch {
+      // silent — even if signOut fails, hard reload will clear client state
+    }
+    window.location.href = "/";
   }
 
   const link =
@@ -76,15 +83,23 @@ export function SiteHeader() {
     <header className="no-print sticky top-0 z-30 bg-gradient-coffee weave shadow-soft">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3">
         <Link to="/" className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-brass font-display text-xl text-accent-foreground">
-            আ
+          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-brass font-display text-xl text-accent-foreground">
+            {!logoError ? (
+              <img
+                src="/logo.png"
+                alt={SHOP.name}
+                className="h-full w-full object-cover"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              "আ"
+            )}
           </span>
           <span className="font-display text-lg text-primary-foreground md:text-xl">
             {SHOP.name}
           </span>
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((l) => (
             <Link
@@ -98,7 +113,6 @@ export function SiteHeader() {
             </Link>
           ))}
 
-          {/* Chat icon — logged in users */}
           {me && (
             <Link
               to="/account/messages"
@@ -122,7 +136,6 @@ export function SiteHeader() {
           )}
         </nav>
 
-        {/* Mobile toggle */}
         <div className="flex items-center gap-1 md:hidden">
           {me && (
             <Link
@@ -148,7 +161,6 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* Mobile drawer */}
       {open && (
         <div className="border-t border-primary-foreground/10 bg-sidebar p-3 md:hidden">
           <nav className="space-y-1">
@@ -160,7 +172,11 @@ export function SiteHeader() {
             ))}
 
             {me && (
-              <Link to="/account/messages" onClick={() => setOpen(false)} className={mobileLink}>
+              <Link
+                to="/account/messages"
+                onClick={() => setOpen(false)}
+                className={mobileLink}
+              >
                 <MessageCircle className="mr-2 inline h-4 w-4 align-middle" />
                 Messages
                 {chatUnread > 0 && (
@@ -173,7 +189,7 @@ export function SiteHeader() {
 
             {me && (
               <>
-                <div className="border-t border-sidebar-border pt-2 mt-2">
+                <div className="mt-2 border-t border-sidebar-border pt-2">
                   <p className="px-4 py-2 text-xs text-sidebar-foreground/70">
                     {me.full_name} · {me.mobile}
                   </p>

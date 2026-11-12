@@ -1,5 +1,5 @@
 // src/routes/_authenticated/admin.users.tsx
-// ইউজার ও কাস্টমার ব্যবস্থাপনা — Auto Serial + Password Reset with 2FA
+// ইউজার ও কাস্টমার ব্যবস্থাপনা — Avatar + Auto Serial + Password Reset
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -11,6 +11,7 @@ import { toBnDigits, roleLabel } from "@/lib/shop";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { DestructiveOtpDialog } from "@/components/admin/DestructiveOtpDialog";
+import { AvatarUploader } from "@/components/shared/AvatarUploader";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
@@ -23,6 +24,7 @@ type Row = {
   full_name: string;
   mobile: string;
   serial: string | null;
+  avatar_path: string | null;
   last_login_at: string | null;
   roles: string[];
 };
@@ -47,10 +49,7 @@ function Users() {
   const [busy, setBusy] = useState(false);
 
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
-  const [pendingReset, setPendingReset] = useState<{
-    userId: string;
-    password: string;
-  } | null>(null);
+  const [pendingReset, setPendingReset] = useState<{ userId: string; password: string } | null>(null);
 
   const [f, setF] = useState({
     role: "customer" as "owner" | "moderator" | "customer",
@@ -69,14 +68,19 @@ function Users() {
     queryFn: async (): Promise<Row[]> => {
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id,full_name,mobile,serial,last_login_at");
+        .select("id,full_name,mobile,serial,avatar_path,last_login_at");
       const { data: roles } = await supabase.from("user_roles").select("user_id,role");
       const map: Record<string, string[]> = {};
       for (const r of roles ?? []) {
         (map[r.user_id] ??= []).push(r.role);
       }
       return (profiles ?? []).map((p) => ({
-        ...p,
+        id: p.id,
+        full_name: p.full_name ?? "",
+        mobile: p.mobile ?? "",
+        serial: p.serial,
+        avatar_path: (p as { avatar_path?: string | null }).avatar_path ?? null,
+        last_login_at: p.last_login_at,
         roles: map[p.id] ?? [],
       }));
     },
@@ -100,15 +104,11 @@ function Users() {
     if (showAdd && f.role === "customer" && !f.serial) {
       setF((prev) => ({ ...prev, serial: suggestNextSerial(existingSerials) }));
     }
-  }, [showAdd, f.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showAdd, f.role]);
 
   function changeRole(newRole: "owner" | "moderator" | "customer") {
     if (newRole === "customer") {
-      setF((prev) => ({
-        ...prev,
-        role: newRole,
-        serial: prev.serial || suggestNextSerial(existingSerials),
-      }));
+      setF((prev) => ({ ...prev, role: newRole, serial: prev.serial || suggestNextSerial(existingSerials) }));
     } else {
       setF((prev) => ({ ...prev, role: newRole, serial: "" }));
     }
@@ -132,22 +132,11 @@ function Users() {
     setBusy(true);
     try {
       await createAcc({ data: f });
-      toast.success(
-        f.role === "customer"
-          ? `কাস্টমার তৈরি হয়েছে — সিরিয়াল ${f.serial}`
-          : "অ্যাকাউন্ট তৈরি হয়েছে",
-      );
+      toast.success(f.role === "customer" ? `কাস্টমার তৈরি হয়েছে — সিরিয়াল ${f.serial}` : "অ্যাকাউন্ট তৈরি হয়েছে");
       setShowAdd(false);
       setF({
-        role: "customer",
-        full_name: "",
-        mobile: "",
-        password: "",
-        serial: "",
-        shop_name: "",
-        address: "",
-        location: "",
-        area_id: "",
+        role: "customer", full_name: "", mobile: "", password: "",
+        serial: "", shop_name: "", address: "", location: "", area_id: "",
       });
       qc.invalidateQueries({ queryKey: ["users-list"] });
     } catch (e) {
@@ -168,10 +157,7 @@ function Users() {
       toast.error("পাসওয়ার্ড কমপক্ষে ৬ অক্ষর");
       return;
     }
-    setPendingReset({
-      userId: resetTarget.id,
-      password: newPassword,
-    });
+    setPendingReset({ userId: resetTarget.id, password: newPassword });
     setOtpDialogOpen(true);
   }
 
@@ -200,12 +186,10 @@ function Users() {
     }
   }
 
-  const serialValid =
-    f.role !== "customer" || (f.serial.trim() && !existingSerials.includes(f.serial.trim()));
+  const serialValid = f.role !== "customer" || (f.serial.trim() && !existingSerials.includes(f.serial.trim()));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      {/* Header with Back */}
       <div className="flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin" />
         <h1 className="font-display text-3xl text-primary">ইউজার ও কাস্টমার</h1>
@@ -269,9 +253,7 @@ function Users() {
                   <input
                     value={f.serial}
                     onChange={(e) => setF({ ...f, serial: e.target.value.trim() })}
-                    className={`block h-10 flex-1 rounded-md border bg-background px-3 font-mono ${
-                      serialValid ? "" : "border-destructive text-destructive"
-                    }`}
+                    className={`block h-10 flex-1 rounded-md border bg-background px-3 font-mono ${serialValid ? "" : "border-destructive text-destructive"}`}
                     placeholder="001"
                   />
                   <button
@@ -324,8 +306,7 @@ function Users() {
                   <option value="">— এলাকা —</option>
                   {areas.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name_bn || a.name} (
-                      {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
+                      {a.name_bn || a.name} ({["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
                     </option>
                   ))}
                 </select>
@@ -345,12 +326,13 @@ function Users() {
         </div>
       )}
 
-      {/* User Table */}
+      {/* Users List with Avatar */}
       <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
         <div className="table-scroll">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[820px] text-sm">
             <thead className="bg-secondary text-secondary-foreground">
               <tr>
+                <th className="px-4 py-3 text-left">ছবি</th>
                 <th className="px-4 py-3 text-left">সিরিয়াল</th>
                 <th className="px-4 py-3 text-left">নাম</th>
                 <th className="px-4 py-3 text-left">মোবাইল</th>
@@ -362,6 +344,15 @@ function Users() {
             <tbody>
               {rows.map((u) => (
                 <tr key={u.id} className="border-t hover:bg-accent/10">
+                  <td className="px-4 py-2">
+                    <AvatarUploader
+                      userId={u.id}
+                      currentPath={u.avatar_path}
+                      name={u.full_name}
+                      size={44}
+                      canEdit={true}
+                    />
+                  </td>
                   <td className="px-4 py-2 tabular-nums">
                     {u.serial ? toBnDigits(u.serial) : "—"}
                   </td>
@@ -375,7 +366,7 @@ function Users() {
                     <button
                       onClick={() => openReset(u)}
                       className="rounded p-2 text-primary hover:bg-accent"
-                      title="পাসওয়ার্ড রিসেট (OTP সহ)"
+                      title="পাসওয়ার্ড রিসেট"
                     >
                       <KeyRound className="h-4 w-4" />
                     </button>
@@ -384,7 +375,7 @@ function Users() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                     কোনো ইউজার নেই
                   </td>
                 </tr>
@@ -396,23 +387,14 @@ function Users() {
 
       {/* Password Reset Modal */}
       {resetTarget && !otpDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !busy && setResetTarget(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !busy && setResetTarget(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-5 w-5 text-primary" />
                 <h2 className="font-display text-xl text-primary">পাসওয়ার্ড রিসেট</h2>
               </div>
-              <button
-                onClick={() => !busy && setResetTarget(null)}
-                className="rounded p-1 hover:bg-accent"
-              >
+              <button onClick={() => !busy && setResetTarget(null)} className="rounded p-1 hover:bg-accent">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -424,34 +406,21 @@ function Users() {
               </span>
             </p>
 
-            <div className="mb-4 rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-xs">
-              <p style={{ color: "#4a2f1e" }}>
-                <strong>🔐 2-step verification:</strong> পরের ধাপে আপনার মোবাইলে OTP পাঠানো হবে। OTP
-                দিলেই পাসওয়ার্ড পরিবর্তন হবে।
-              </p>
-            </div>
-
             <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">
-                নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)
-              </span>
+              <span className="text-xs text-muted-foreground">নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</span>
               <input
                 type="password"
                 autoFocus
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") doReset();
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") doReset(); }}
                 className="mt-1 block h-11 w-full rounded-md border bg-background px-3"
                 placeholder="••••••"
               />
             </label>
 
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setResetTarget(null)} disabled={busy}>
-                বাতিল
-              </Button>
+              <Button variant="outline" onClick={() => setResetTarget(null)} disabled={busy}>বাতিল</Button>
               <Button variant="coffee" onClick={doReset} disabled={busy || newPassword.length < 6}>
                 <Save /> পরবর্তী ধাপ
               </Button>
@@ -460,20 +429,12 @@ function Users() {
         </div>
       )}
 
-      {/* 2FA Dialog */}
       <DestructiveOtpDialog
         open={otpDialogOpen}
-        onClose={() => {
-          setOtpDialogOpen(false);
-          setPendingReset(null);
-        }}
+        onClose={() => { setOtpDialogOpen(false); setPendingReset(null); }}
         onVerified={handleVerifiedReset}
         title="পাসওয়ার্ড রিসেট নিশ্চিত করুন"
-        description={
-          resetTarget
-            ? `${resetTarget.full_name}-এর পাসওয়ার্ড পরিবর্তন করতে আপনার মোবাইলে পাঠানো OTP দিন।`
-            : ""
-        }
+        description={resetTarget ? `${resetTarget.full_name}-এর পাসওয়ার্ড পরিবর্তন করতে আপনার মোবাইলে পাঠানো OTP দিন।` : ""}
       />
     </div>
   );

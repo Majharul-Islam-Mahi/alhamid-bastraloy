@@ -1,6 +1,9 @@
 // src/routes/_authenticated/admin.party.$id.tsx
 // কাস্টমার হিসাব — Full history + lazy load + optional date filter
-// [UPDATED] Memo tab polished — same pattern as memo.index (pending/confirmed split, row cards)
+//
+// 🐛 FIX: Opening balance query — 2 sequential awaits → Promise.all
+// 🐛 FIX: Memos limit 2000 → 500 (view-optimized)
+// 🐛 FIX: Deposits limit 2000 → 500
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -25,7 +28,6 @@ import { partyDue } from "@/lib/ledger";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatementHeader } from "@/components/khata/StatementHeader";
 import { DocumentSection } from "@/components/admin/DocumentSection";
 import { toast } from "sonner";
 
@@ -61,6 +63,8 @@ type MemoRow = {
 };
 
 const PAGE_SIZE = 50;
+const MEMO_LIMIT = 500;
+const DEPOSIT_LIMIT = 500;
 
 function shiftDays(iso: string, d: number): string {
   const x = new Date(iso + "T00:00:00");
@@ -79,7 +83,6 @@ function PartyPage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
 
-  // Date filter is OPTIONAL — default = all time
   const [useDateFilter, setUseDateFilter] = useState(false);
   const [from, setFrom] = useState(shiftDays(todayISO(), -90));
   const [to, setTo] = useState(todayISO());
@@ -87,7 +90,6 @@ function PartyPage() {
   const [showDep, setShowDep] = useState(false);
   const [dep, setDep] = useState({ amount: "", details: "" });
 
-  // Lazy load displayed rows
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [memoDisplayCount, setMemoDisplayCount] = useState(PAGE_SIZE);
   const [memoSearch, setMemoSearch] = useState("");
@@ -109,7 +111,7 @@ function PartyPage() {
     queryFn: async () => (await supabase.from("parties").select("*").eq("id", id).single()).data,
   });
 
-  // ---- ALL memos (no limit — can be hundreds) ----
+  // ---- Memos (500 limit) ----
   const { data: allMemos = [] } = useQuery({
     queryKey: ["party-memos-all", id],
     enabled: !!id,
@@ -120,11 +122,11 @@ function PartyPage() {
           .select("id,memo_no,memo_date,total,paid,status,memo_type,note")
           .eq("party_id", id)
           .order("memo_date", { ascending: false })
-          .limit(2000)
+          .limit(MEMO_LIMIT)
       ).data ?? []) as MemoRow[],
   });
 
-  // ---- ALL deposits (no limit) ----
+  // ---- Deposits (500 limit) ----
   const { data: allDeposits = [] } = useQuery({
     queryKey: ["party-deposits-all", id],
     enabled: !!id,
@@ -136,17 +138,17 @@ function PartyPage() {
           .eq("party_id", id)
           .eq("kind", "deposit")
           .order("entry_date", { ascending: false })
-          .limit(2000)
+          .limit(DEPOSIT_LIMIT)
       ).data ?? [],
   });
 
-  // ---- Current due (full lifetime) ----
+  // ---- Current due (full lifetime — 2 queries) ----
   const { data: currentDue = 0 } = useQuery({
     queryKey: ["party-due", id],
     queryFn: () => partyDue(id),
   });
 
-  // ---- Filtered memos (for ledger) ----
+  // ---- Filtered memos ----
   const filteredMemos = useMemo(() => {
     if (!useDateFilter) return allMemos;
     return allMemos.filter((m) => m.memo_date >= from && m.memo_date <= to);
@@ -157,31 +159,36 @@ function PartyPage() {
     return allDeposits.filter((d) => d.entry_date >= from && d.entry_date <= to);
   }, [allDeposits, useDateFilter, from, to]);
 
-  // ---- Opening balance: if date filter, compute balance before `from` ----
+  // 🚀 OPTIMIZED: opening balance — Promise.all (parallel queries)
   const { data: opening = 0 } = useQuery({
     queryKey: ["party-opening-v2", id, from, useDateFilter],
     enabled: !!id && useDateFilter,
     queryFn: async () => {
-      const { data: prevMemos } = await supabase
-        .from("memos")
-        .select("total,paid")
-        .eq("party_id", id)
-        .eq("status", "confirmed")
-        .lt("memo_date", from);
-      const { data: prevDeposits } = await supabase
-        .from("day_entries")
-        .select("amount")
-        .eq("party_id", id)
-        .eq("kind", "deposit")
-        .lt("entry_date", from);
+      const [{ data: prevMemos }, { data: prevDeposits }] = await Promise.all([
+        supabase
+          .from("memos")
+          .select("total,paid")
+          .eq("party_id", id)
+          .eq("status", "confirmed")
+          .lt("memo_date", from),
+        supabase
+          .from("day_entries")
+          .select("amount")
+          .eq("party_id", id)
+          .eq("kind", "deposit")
+          .lt("entry_date", from),
+      ]);
 
-      const memoDue = (prevMemos ?? []).reduce((s, m) => s + (Number(m.total) - Number(m.paid)), 0);
+      const memoDue = (prevMemos ?? []).reduce(
+        (s, m) => s + (Number(m.total) - Number(m.paid)),
+        0,
+      );
       const depTotal = (prevDeposits ?? []).reduce((s, d) => s + Number(d.amount), 0);
       return memoDue - depTotal;
     },
   });
 
-  // ---- Ledger rows (sorted ascending for running balance) ----
+  // ---- Ledger rows ----
   const rows: Row[] = useMemo(() => {
     return [
       ...filteredMemos
@@ -213,7 +220,7 @@ function PartyPage() {
 
   const openingBalance = useDateFilter ? opening : 0;
 
-  // Running balance (compute full)
+  // Running balance
   let running = openingBalance;
   const withRunning = [
     {
@@ -239,12 +246,11 @@ function PartyPage() {
   const totalMemoPaid = rows.reduce((s, r) => s + r.memoPaid, 0);
   const closingBalance = openingBalance + totalSales - totalMemoPaid - totalDeposits;
 
-  // Reversed for display (newest first)
   const displayRows = [...withRunning].reverse();
   const visibleRows = displayRows.slice(0, displayCount);
   const hasMoreRows = displayCount < displayRows.length;
 
-  // ---- Memo tab: search + split by status + paginate ----
+  // ---- Memo tab search + split ----
   const filteredAllMemos = useMemo(() => {
     const q = memoSearch.trim().toLowerCase();
     if (!q) return allMemos;
@@ -307,7 +313,7 @@ function PartyPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      {/* ============ Toolbar ============ */}
+      {/* Toolbar */}
       <div className="no-print flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin/wholesale" />
         <h1 className="font-display text-xl text-primary">কাস্টমার হিসাব</h1>
@@ -321,7 +327,7 @@ function PartyPage() {
         </div>
       </div>
 
-      {/* ============ Profile Card ============ */}
+      {/* Profile Card */}
       <div className="no-print rounded-2xl bg-gradient-coffee weave p-5 text-primary-foreground shadow-soft md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -348,7 +354,6 @@ function PartyPage() {
           </div>
         </div>
 
-        {/* Lifetime summary chips */}
         <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
           <div className="rounded-lg bg-white/10 p-2 text-center">
             <p className="opacity-75">মোট মেমো</p>
@@ -365,7 +370,7 @@ function PartyPage() {
         </div>
       </div>
 
-      {/* ============ Tabs ============ */}
+      {/* Tabs */}
       <Tabs defaultValue="ledger">
         <TabsList className="grid h-11 w-full grid-cols-4">
           <TabsTrigger value="ledger">লেজার</TabsTrigger>
@@ -376,7 +381,6 @@ function PartyPage() {
 
         {/* ==================== TAB 1: LEDGER ==================== */}
         <TabsContent value="ledger" className="mt-4 space-y-4">
-          {/* Deposit form */}
           {showDep && (
             <div className="no-print flex flex-wrap items-end gap-3 rounded-2xl border-2 border-primary/30 bg-card p-4 shadow-card">
               <label className="text-sm">
@@ -417,7 +421,6 @@ function PartyPage() {
             </div>
           )}
 
-          {/* Date filter (optional, collapsed by default) */}
           <div className="no-print rounded-2xl border bg-card p-3 shadow-card">
             <button
               onClick={() => setUseDateFilter((v) => !v)}
@@ -492,7 +495,6 @@ function PartyPage() {
             )}
           </div>
 
-          {/* 4 Summary cards */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               icon={<TrendingUp className="h-4 w-4" />}
@@ -520,7 +522,6 @@ function PartyPage() {
             />
           </div>
 
-          {/* Print header + ledger table */}
           <div className="rounded-2xl border bg-white p-4 shadow-card md:p-6">
             <div className="no-print mb-3 text-xs text-muted-foreground">
               {toBnDigits(displayRows.length)} টি লেনদেন — {toBnDigits(visibleRows.length)} টি দেখা
@@ -582,7 +583,6 @@ function PartyPage() {
               </table>
             </div>
 
-            {/* Load more */}
             {hasMoreRows && (
               <div className="no-print mt-4 text-center">
                 <Button variant="outline" onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}>
@@ -592,7 +592,6 @@ function PartyPage() {
               </div>
             )}
 
-            {/* Print signature */}
             <div className="mt-16 flex flex-wrap items-end justify-between gap-6">
               <div className="text-center">
                 <p className="font-display text-lg text-primary border-t border-primary pt-1">
@@ -608,9 +607,8 @@ function PartyPage() {
           </div>
         </TabsContent>
 
-        {/* ==================== TAB 2: MEMOS (POLISHED) ==================== */}
+        {/* ==================== TAB 2: MEMOS ==================== */}
         <TabsContent value="memos" className="mt-4 space-y-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -624,7 +622,6 @@ function PartyPage() {
             />
           </div>
 
-          {/* Summary chips */}
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">
               মোট {toBnDigits(filteredAllMemos.length)}
@@ -646,7 +643,6 @@ function PartyPage() {
             )}
           </div>
 
-          {/* Pending section (yellow theme) */}
           {pendingMemos.length > 0 && (
             <div className="overflow-hidden rounded-2xl border-2 border-yellow-500/40 bg-yellow-50/40 shadow-card">
               <div className="flex items-center gap-2 border-b border-yellow-500/40 px-4 py-3">
@@ -669,7 +665,6 @@ function PartyPage() {
             </div>
           )}
 
-          {/* Confirmed / Void section (coffee header — same as memo.index) */}
           <div
             className="overflow-hidden rounded-2xl border bg-card shadow-card"
             style={{ borderColor: "#dbcbb2" }}
@@ -684,19 +679,13 @@ function PartyPage() {
               <BookOpen className="h-5 w-5" style={{ color: "#f8f3ea" }} />
               <h3
                 className="flex-1 text-lg font-semibold"
-                style={{
-                  fontFamily: "'Tiro Bangla', serif",
-                  color: "#f8f3ea",
-                }}
+                style={{ fontFamily: "'Tiro Bangla', serif", color: "#f8f3ea" }}
               >
                 মেমো হিস্ট্রি
               </h3>
               <span
                 className="rounded-full px-2.5 py-0.5 text-xs font-bold"
-                style={{
-                  backgroundColor: "rgba(217,168,90,0.25)",
-                  color: "#f8f3ea",
-                }}
+                style={{ backgroundColor: "rgba(217,168,90,0.25)", color: "#f8f3ea" }}
               >
                 {toBnDigits(doneMemos.length)}
               </span>
@@ -833,7 +822,6 @@ function InfoRow({
   );
 }
 
-// ---- Memo row (same pattern as admin.memo.index) ----
 function MemoRowItem({ memo: m }: { memo: MemoRow }) {
   const due = Number(m.total) - Number(m.paid);
   const isDraft = m.status === "draft";
@@ -847,7 +835,6 @@ function MemoRowItem({ memo: m }: { memo: MemoRow }) {
         isVoid ? "opacity-60" : ""
       }`}
     >
-      {/* Memo no badge */}
       <div
         className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[10px] font-bold ${
           isDraft
@@ -863,7 +850,6 @@ function MemoRowItem({ memo: m }: { memo: MemoRow }) {
         </span>
       </div>
 
-      {/* Info */}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-primary">{m.note || "মেমো"}</p>
         <p className="truncate text-[11px] text-muted-foreground">
@@ -871,7 +857,6 @@ function MemoRowItem({ memo: m }: { memo: MemoRow }) {
         </p>
       </div>
 
-      {/* Amount */}
       <div className="shrink-0 text-right">
         <p className="text-sm font-bold tabular-nums text-primary">{taka(m.total)}</p>
         {due > 0 && !isVoid && (

@@ -1,5 +1,7 @@
 // src/routes/_authenticated/admin.areas.tsx
 // এলাকা ব্যবস্থাপনা — কোন দিন কোন এলাকায় কালেকশন + Back button
+//
+// ⚠️ FIX: Inline edit এ React Query cache mutate হচ্ছিল। editBuffer state দিয়ে fix।
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -26,6 +28,12 @@ type Area = {
   sort_order: number;
 };
 
+type EditBuffer = {
+  name: string;
+  name_bn: string;
+  day_of_week: number;
+};
+
 const DAYS = ["রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার", "শনিবার"];
 
 function AreasPage() {
@@ -33,6 +41,7 @@ function AreasPage() {
   const confirmDialog = useConfirm();
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [editBuffer, setEditBuffer] = useState<EditBuffer | null>(null);
   const [form, setForm] = useState({
     name: "",
     name_bn: "",
@@ -69,23 +78,56 @@ function AreasPage() {
     qc.invalidateQueries({ queryKey: ["areas"] });
   }
 
-  async function updateArea(a: Area) {
+  // ---- Safe edit handlers ----
+  function startEdit(a: Area) {
+    setEditId(a.id);
+    setEditBuffer({
+      name: a.name,
+      name_bn: a.name_bn ?? "",
+      day_of_week: a.day_of_week,
+    });
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setEditBuffer(null);
+  }
+
+  async function saveEdit() {
+    if (!editId || !editBuffer) return;
+    if (!editBuffer.name.trim()) {
+      toast.error("এলাকার নাম দিন");
+      return;
+    }
     const { error } = await supabase
       .from("areas")
       .update({
-        name: a.name,
-        name_bn: a.name_bn,
-        day_of_week: a.day_of_week,
-        description: a.description,
-        active: a.active,
+        name: editBuffer.name.trim(),
+        name_bn: editBuffer.name_bn.trim() || null,
+        day_of_week: editBuffer.day_of_week,
       })
-      .eq("id", a.id);
+      .eq("id", editId);
+
     if (error) {
       toast.error("আপডেট হয়নি: " + error.message);
       return;
     }
     toast.success("আপডেট হয়েছে");
     setEditId(null);
+    setEditBuffer(null);
+    qc.invalidateQueries({ queryKey: ["areas"] });
+  }
+
+  async function toggleActive(a: Area) {
+    const { error } = await supabase
+      .from("areas")
+      .update({ active: !a.active })
+      .eq("id", a.id);
+    if (error) {
+      toast.error("আপডেট হয়নি: " + error.message);
+      return;
+    }
+    toast.success(!a.active ? "চালু করা হয়েছে" : "বন্ধ করা হয়েছে");
     qc.invalidateQueries({ queryKey: ["areas"] });
   }
 
@@ -199,91 +241,108 @@ function AreasPage() {
             </div>
 
             <div className="divide-y">
-              {g.areas.map((a) => (
-                <div
-                  key={a.id}
-                  className="grid gap-2 p-3 md:p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center"
-                >
-                  {editId === a.id ? (
-                    <>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <input
-                          defaultValue={a.name}
-                          onChange={(e) => (a.name = e.target.value)}
+              {g.areas.map((a) => {
+                const isEditing = editId === a.id;
+                return (
+                  <div
+                    key={a.id}
+                    className="grid gap-2 p-3 md:p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                  >
+                    {isEditing ? (
+                      <>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            value={editBuffer?.name ?? ""}
+                            onChange={(e) =>
+                              setEditBuffer((b) => (b ? { ...b, name: e.target.value } : b))
+                            }
+                            className="h-9 rounded border bg-background px-2 text-sm"
+                          />
+                          <input
+                            value={editBuffer?.name_bn ?? ""}
+                            onChange={(e) =>
+                              setEditBuffer((b) => (b ? { ...b, name_bn: e.target.value } : b))
+                            }
+                            className="h-9 rounded border bg-background px-2 text-sm"
+                            placeholder="বাংলা নাম"
+                          />
+                        </div>
+                        <select
+                          value={editBuffer?.day_of_week ?? 0}
+                          onChange={(e) =>
+                            setEditBuffer((b) =>
+                              b ? { ...b, day_of_week: Number(e.target.value) } : b,
+                            )
+                          }
                           className="h-9 rounded border bg-background px-2 text-sm"
-                        />
-                        <input
-                          defaultValue={a.name_bn ?? ""}
-                          onChange={(e) => (a.name_bn = e.target.value || null)}
-                          className="h-9 rounded border bg-background px-2 text-sm"
-                          placeholder="বাংলা নাম"
-                        />
-                      </div>
-                      <select
-                        defaultValue={a.day_of_week}
-                        onChange={(e) => (a.day_of_week = Number(e.target.value))}
-                        className="h-9 rounded border bg-background px-2 text-sm"
-                      >
-                        {DAYS.map((d, i) => (
-                          <option key={i} value={i}>
-                            {d}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => updateArea(a)}
-                          className="rounded bg-success/10 p-2 text-success hover:bg-success/20"
                         >
-                          <Save className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => setEditId(null)} className="rounded bg-muted p-2">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="min-w-0">
-                        <p className="font-semibold" style={{ color: "#3a2318" }}>
-                          {a.name_bn || a.name}
-                          <span className="ml-2 text-xs" style={{ color: "#7a6558" }}>
-                            ({a.name})
-                          </span>
-                        </p>
-                        {a.description && (
-                          <p className="text-xs" style={{ color: "#7a6558" }}>
-                            {a.description}
+                          {DAYS.map((d, i) => (
+                            <option key={i} value={i}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={saveEdit}
+                            className="rounded bg-success/10 p-2 text-success hover:bg-success/20"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="rounded bg-muted p-2"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="min-w-0">
+                          <p className="font-semibold" style={{ color: "#3a2318" }}>
+                            {a.name_bn || a.name}
+                            <span className="ml-2 text-xs" style={{ color: "#7a6558" }}>
+                              ({a.name})
+                            </span>
                           </p>
-                        )}
-                      </div>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                          a.active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {a.active ? "✅ চালু" : "⏸ বন্ধ"}
-                      </span>
-                      <div className="flex gap-1">
+                          {a.description && (
+                            <p className="text-xs" style={{ color: "#7a6558" }}>
+                              {a.description}
+                            </p>
+                          )}
+                        </div>
                         <button
-                          onClick={() => setEditId(a.id)}
-                          className="rounded p-2 text-primary hover:bg-accent"
-                          title="এডিট"
+                          onClick={() => toggleActive(a)}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
+                            a.active
+                              ? "bg-success/10 text-success"
+                              : "bg-muted text-muted-foreground"
+                          }`}
                         >
-                          <Pencil className="h-4 w-4" />
+                          {a.active ? "✅ চালু" : "⏸ বন্ধ"}
                         </button>
-                        <button
-                          onClick={() => deleteArea(a.id)}
-                          className="rounded p-2 text-destructive hover:bg-destructive/10"
-                          title="মুছুন"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => startEdit(a)}
+                            className="rounded p-2 text-primary hover:bg-accent"
+                            title="এডিট"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteArea(a.id)}
+                            className="rounded p-2 text-destructive hover:bg-destructive/10"
+                            title="মুছুন"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
               {g.areas.length === 0 && (
                 <p className="p-6 text-center text-sm text-muted-foreground">
                   এই দিনে কোনো এলাকা নেই

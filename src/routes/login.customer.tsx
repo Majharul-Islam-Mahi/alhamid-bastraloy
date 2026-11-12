@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LoginPage } from "@/components/shop/LoginPage";
 
 export const Route = createFileRoute("/login/customer")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "কাস্টমার লগইন — আল হামিদ বস্ত্রালয়" },

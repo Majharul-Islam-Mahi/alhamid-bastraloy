@@ -6,7 +6,28 @@
       "idx": 0,
       "version": "7",
       "when": 1790949099479,
-      "tag": "0000_migration",
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790950000000,
+      "tag": "0001_rate_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0002_full_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794380538869,
+      "tag": "0003_outstanding_cerebro",
       "breakpoints": true
     }
   ]
