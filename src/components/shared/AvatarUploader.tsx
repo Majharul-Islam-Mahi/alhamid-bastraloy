@@ -33,7 +33,6 @@ export function AvatarUploader({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 🐛 FIX: sync prop → state (prevents avatar disappearing after F5)
-  // useMe() লোড হতে দেরি হলে currentPath=null দিয়ে mount হয়, পরে prop আসলে update হয়
   useEffect(() => {
     setPath(currentPath);
   }, [currentPath]);
