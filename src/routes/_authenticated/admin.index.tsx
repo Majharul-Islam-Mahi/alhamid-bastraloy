@@ -1,8 +1,5 @@
 // src/routes/_authenticated/admin.index.tsx
 // অ্যাডমিন ড্যাশবোর্ড
-
-// FIX: threshold useState — stock page এ বদলালে Dashboard জানে না
-// এখন: React Query দিয়ে threshold track + stock page invalidate
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -25,6 +22,7 @@ import { LiveWidgets } from "@/components/admin/LiveWidgets";
 import { SalesChart } from "@/components/admin/SalesChart";
 import { LowStockWidget } from "@/components/admin/LowStockWidget";
 import { QuickActions } from "@/components/admin/QuickActions";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: Dashboard,
@@ -77,7 +75,6 @@ function Dashboard() {
 
   useKeyboardShortcuts();
 
-  // FIX: threshold — React Query (stock page invalidate করে)
   const { data: threshold = 5 } = useQuery({
     queryKey: ["low-stock-threshold"],
     queryFn: () => readThreshold(),
@@ -114,7 +111,6 @@ function Dashboard() {
     },
   });
 
-  // FIX: threshold in queryKey — stock page এ বদলালে refetch হবে
   const { data: lowStockCount = 0 } = useQuery({
     queryKey: ["dashboard-low-stock-count", threshold],
     queryFn: async () => {
@@ -196,6 +192,9 @@ function Dashboard() {
 
   const visibleModules = modules.filter((m) => me?.isOwner || m.moderatorAllowed);
 
+  // avatar_path might not be in the useMe type; cast safely
+  const avatarPath = (me as { avatar_path?: string | null } | null | undefined)?.avatar_path ?? null;
+
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-3 md:space-y-6 md:px-0">
       <div
@@ -210,21 +209,31 @@ function Dashboard() {
           }}
         />
         <div className="relative">
-          <p
-            className="text-sm md:text-base"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#d9a85a" }}
-          >
-            {SHOP.bismillah}
-          </p>
-          <h1
-            className="mt-1 text-2xl md:text-3xl"
-            style={{ fontFamily: "'Tiro Bangla', serif", color: "#f8f3ea" }}
-          >
-            আসসালামু আলাইকুম, {me?.full_name}
-          </h1>
-          <p className="mt-1 text-xs md:text-sm" style={{ color: "#e8dcc8" }}>
-            {weekdayBn(d)} · {englishDateBn(d)} · {banglaDate(d)}
-          </p>
+          <div className="flex items-center gap-3 md:gap-4">
+            <UserAvatar
+              path={avatarPath}
+              name={me?.full_name ?? "?"}
+              size={60}
+              borderColor="#d9a85a"
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-sm md:text-base"
+                style={{ fontFamily: "'Tiro Bangla', serif", color: "#d9a85a" }}
+              >
+                {SHOP.bismillah}
+              </p>
+              <h1
+                className="mt-1 truncate text-2xl md:text-3xl"
+                style={{ fontFamily: "'Tiro Bangla', serif", color: "#f8f3ea" }}
+              >
+                আসসালামু আলাইকুম, {me?.full_name}
+              </h1>
+              <p className="mt-1 text-xs md:text-sm" style={{ color: "#e8dcc8" }}>
+                {weekdayBn(d)} · {englishDateBn(d)} · {banglaDate(d)}
+              </p>
+            </div>
+          </div>
           <div className="mt-4 grid grid-cols-2 gap-2 md:mt-5 md:grid-cols-4 md:gap-3">
             <StatChip label="নগদ বিক্রি" value={sum?.sales} />
             <StatChip label="খরচ" value={sum?.expenses} />

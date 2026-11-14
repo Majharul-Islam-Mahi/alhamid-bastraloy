@@ -1,8 +1,5 @@
 // src/components/shop/SiteHeader.tsx
 // পাবলিক হেডার মেনু — desktop + mobile responsive + Chat icon
-
-// FIX: Logout এর পরে UI refresh হয় না (race condition with onAuthStateChange)
-// Hard reload সবচেয়ে reliable
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
 import { SHOP, toBnDigits } from "@/lib/shop";
 import { chatUnreadCount } from "@/lib/chat.functions";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 
 export function SiteHeader() {
   const { data: me } = useMe();
@@ -29,14 +27,13 @@ export function SiteHeader() {
   const chatUnread = chatData?.count ?? 0;
 
   async function logout() {
-    // FIX: Hard reload ensures clean state (no stale cache, no race condition)
     setOpen(false);
     try {
       await qc.cancelQueries();
       qc.clear();
       await supabase.auth.signOut();
     } catch {
-      // silent — even if signOut fails, hard reload will clear client state
+      // silent — hard reload will clear client state
     }
     window.location.href = "/";
   }
@@ -78,6 +75,8 @@ export function SiteHeader() {
       icon: <UserCircle className="h-4 w-4" />,
     });
   }
+
+  const avatarPath = (me as { avatar_path?: string | null } | null | undefined)?.avatar_path ?? null;
 
   return (
     <header className="no-print sticky top-0 z-30 bg-gradient-coffee weave shadow-soft">
@@ -130,9 +129,21 @@ export function SiteHeader() {
           )}
 
           {me && (
-            <button onClick={logout} className={link}>
-              <LogOut className="mr-1 inline h-4 w-4" /> লগআউট
-            </button>
+            <>
+              <Link
+                to={me.isStaff ? "/admin" : "/account"}
+                className="ml-1 flex h-9 items-center gap-2 rounded-full pl-1 pr-3 transition-colors hover:bg-primary-foreground/10"
+                title={me.full_name}
+              >
+                <UserAvatar path={avatarPath} name={me.full_name ?? "?"} size={28} borderColor="#d9a85a" />
+                <span className="text-sm font-medium text-primary-foreground/85">
+                  {me.full_name}
+                </span>
+              </Link>
+              <button onClick={logout} className={link}>
+                <LogOut className="mr-1 inline h-4 w-4" /> লগআউট
+              </button>
+            </>
           )}
         </nav>
 
@@ -190,9 +201,22 @@ export function SiteHeader() {
             {me && (
               <>
                 <div className="mt-2 border-t border-sidebar-border pt-2">
-                  <p className="px-4 py-2 text-xs text-sidebar-foreground/70">
-                    {me.full_name} · {me.mobile}
-                  </p>
+                  <div className="flex items-center gap-2 px-2 py-2">
+                    <UserAvatar
+                      path={avatarPath}
+                      name={me.full_name ?? "?"}
+                      size={36}
+                      borderColor="#d9a85a"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-sidebar-foreground">
+                        {me.full_name}
+                      </p>
+                      <p className="truncate text-[10px] text-sidebar-foreground/70">
+                        {me.mobile}
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <button onClick={logout} className={mobileLink + " w-full text-left"}>
                   <LogOut className="mr-2 inline h-4 w-4" />

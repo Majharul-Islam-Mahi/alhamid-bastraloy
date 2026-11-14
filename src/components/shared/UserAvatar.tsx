@@ -1,5 +1,4 @@
 // src/components/shared/UserAvatar.tsx
-// SAFE version with logging — diagnose crashes
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -24,7 +23,6 @@ export function UserAvatar({
 }: Props) {
   const [error, setError] = useState(false);
 
-  // SAFE getPublicUrl — wrapped in try/catch
   let url: string | null = null;
   if (path) {
     try {
@@ -43,10 +41,7 @@ export function UserAvatar({
       <img
         src={url}
         alt={name}
-        onError={(e) => {
-          console.warn("[UserAvatar] image load failed:", url);
-          setError(true);
-        }}
+        onError={() => setError(true)}
         loading="lazy"
         className={`rounded-full object-cover ${className}`}
         style={{

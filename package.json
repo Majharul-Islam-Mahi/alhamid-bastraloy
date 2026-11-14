@@ -1,5 +1,6 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "alhamid-bastraloy",
+  "description": "আল হামিদ বস্ত্রালয় — দোকান ব্যবস্থাপনা সিস্টেম",
   "private": true,
   "sideEffects": false,
   "type": "module",
