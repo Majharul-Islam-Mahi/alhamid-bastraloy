@@ -329,7 +329,7 @@ function ForgotPage() {
                   />
                 </div>
                 {confirmPw && newPw !== confirmPw && (
-                  <p className="text-xs text-destructive">⚠️ দুই পাসওয়ার্ড মিলছে না</p>
+                  <p className="text-xs text-destructive"> দুই পাসওয়ার্ড মিলছে না</p>
                 )}
               </div>
 

@@ -172,7 +172,7 @@ function UptimePage() {
           color: "#3a2318",
         }}
       >
-        <p className="font-semibold">📊 প্রতি ৫ মিনিটে Auto Check</p>
+        <p className="font-semibold"> প্রতি ৫ মিনিটে Auto Check</p>
         <p className="mt-1 text-xs" style={{ color: "#7a6558" }}>
           Site production এ deploy করার পর UptimeRobot বা এধরনের free monitoring service এই endpoint
           এ হিট করবে: <strong>/api/health</strong>

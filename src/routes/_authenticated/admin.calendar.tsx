@@ -35,12 +35,12 @@ type Event = {
 };
 
 const EVENT_TYPES = [
-  { value: "halkhata", label: "🔴 হালখাতা", color: "#fef3c7" },
-  { value: "chadrat", label: "🟢 চাদরাত", color: "#10b981" },
-  { value: "collection", label: "🔵 কালেকশন", color: "#3b82f6" },
-  { value: "notice", label: "🟡 সাধারণ নোটিশ", color: "#c9924a" },
+  { value: "halkhata", label: " হালখাতা", color: "#fef3c7" },
+  { value: "chadrat", label: " চাদরাত", color: "#10b981" },
+  { value: "collection", label: "� কালেকশন", color: "#3b82f6" },
+  { value: "notice", label: " সাধারণ নোটিশ", color: "#c9924a" },
   { value: "special", label: "🩷 বিশেষ দিন", color: "#ec4899" },
-  { value: "closed", label: "🔴 বন্ধের দিন", color: "#dc2626" },
+  { value: "closed", label: " বন্ধের দিন", color: "#dc2626" },
 ];
 
 const BN_MONTHS = [

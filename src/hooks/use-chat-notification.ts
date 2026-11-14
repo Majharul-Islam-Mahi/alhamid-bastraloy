@@ -1,9 +1,9 @@
 // src/hooks/use-chat-notification.ts
 // নতুন chat message এলে sound + toast notification
-//
-// 🐛 FIX: toastAction object identity change → useEffect প্রতি render এ re-fire
-// 🐛 FIX: throttle — rapid message flow এ toast spam prevent (5s window)
-// 🐛 FIX: initial mount এ lastCountRef properly initialized
+
+// FIX: toastAction object identity change → useEffect প্রতি render এ re-fire
+// FIX: throttle — rapid message flow এ toast spam prevent (5s window)
+// FIX: initial mount এ lastCountRef properly initialized
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
@@ -72,7 +72,7 @@ export function useChatNotification({
   const lastCountRef = useRef<number>(-1);
   const lastToastAtRef = useRef<number>(0);
 
-  // 🐛 toastAction কে ref এ রাখি — object identity change effect trigger করবে না
+  // toastAction কে ref এ রাখি — object identity change effect trigger করবে না
   const toastActionRef = useRef(toastAction);
   useEffect(() => {
     toastActionRef.current = toastAction;

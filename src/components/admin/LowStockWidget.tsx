@@ -51,7 +51,7 @@ export function LowStockWidget() {
           </h3>
         </div>
         <p className="mt-2 text-sm" style={{ color: "#7a6558" }}>
-          ✅ সব পণ্যের স্টক ঠিক আছে
+           সব পণ্যের স্টক ঠিক আছে
         </p>
       </div>
     );

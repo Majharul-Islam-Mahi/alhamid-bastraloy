@@ -21,7 +21,7 @@ import {
   markCustomerSeen,
 } from "@/lib/chat.functions";
 import { useChatNotification } from "@/hooks/use-chat-notification";
-import { useShopSettings } from "@/hooks/use-shop-settings"; // 🎯 Import for shop avatar
+import { useShopSettings } from "@/hooks/use-shop-settings"; // Import for shop avatar
 import { toBnDigits, SHOP } from "@/lib/shop";
 
 export const Route = createFileRoute("/_authenticated/account_/messages")({
@@ -51,7 +51,7 @@ type Message = {
 
 function CustomerMessages() {
   const qc = useQueryClient();
-  const { data: shop } = useShopSettings(); // 🎯 Get shop photo
+  const { data: shop } = useShopSettings(); // Get shop photo
   const fetchMsgs = useServerFn(myMessages);
   const sendMsg = useServerFn(sendCustomerMessage);
   const sendFile = useServerFn(sendCustomerFile);
@@ -266,9 +266,9 @@ function CustomerMessages() {
                         msg={{ ...m, file_url: signedMap[m.id] ?? null }}
                         isMine={m.sender_role === "customer"}
                         onInfoClick={(mm) => setInfoMsg(mm as Message)}
-                        avatarPath={shop?.shopPhoto ?? null} // 🎯 Shop Photo as avatar
-                        senderName={SHOP.name}             // 🎯 Shop Name for fallback avatar
-                        onVoicePlay={() => markSeen()}      // 🎯 Voice Played = Seen
+                        avatarPath={shop?.shopPhoto ?? null} // Shop Photo as avatar
+                        senderName={SHOP.name}             // Shop Name for fallback avatar
+                        onVoicePlay={() => markSeen()}      // Voice Played = Seen
                       />
                     ))}
                   </div>

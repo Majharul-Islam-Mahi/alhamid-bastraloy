@@ -1,9 +1,9 @@
 // src/routes/_authenticated/admin.stock.tsx
 // স্টক ম্যানেজমেন্ট
-//
-// 🐛 FIX: product list RLS blocked → products not showing
-// 🐛 FIX: initial stock movement not logged
-// 🐛 FIX: threshold update not invalidating dashboard cache
+
+// FIX: product list RLS blocked → products not showing
+// FIX: initial stock movement not logged
+// FIX: threshold update not invalidating dashboard cache
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -83,13 +83,13 @@ function Stock() {
     if (typeof window !== "undefined") {
       localStorage.setItem("low_stock_threshold", String(v));
     }
-    // 🐛 FIX: Dashboard cache invalidate
+    // FIX: Dashboard cache invalidate
     qc.invalidateQueries({ queryKey: ["low-stock-threshold"] });
     qc.invalidateQueries({ queryKey: ["dashboard-low-stock-count"] });
     toast.success("সতর্কতা threshold আপডেট হয়েছে");
   }
 
-  // 🐛 Products query — now uses error state visibility
+  // Products query — now uses error state visibility
   const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
@@ -184,7 +184,7 @@ function Stock() {
       return;
     }
 
-    // 🐛 FIX: initial stock movement log
+    // FIX: initial stock movement log
     if (initialQty > 0) {
       const { error: mvErr } = await supabase.from("stock_movements").insert({
         product_id: newProd.id,
@@ -366,7 +366,7 @@ function Stock() {
           <div className="sm:col-span-4">
             <Button variant="coffee" onClick={addProduct}>সংরক্ষণ</Button>
             <p className="mt-2 text-xs text-muted-foreground">
-              💡 Unit conversion "⚙️" button থেকে set করা যাবে। Initial stock থাকলে automatic stock movement log হবে।
+               Unit conversion "⚙" button থেকে set করা যাবে। Initial stock থাকলে automatic stock movement log হবে।
             </p>
           </div>
         </div>
@@ -465,7 +465,7 @@ function Stock() {
                         ) : (
                           <span className={isLow ? "font-bold text-destructive" : ""}>
                             {toBnDigits(p.quantity)}
-                            {isLow && " ⚠️"}
+                            {isLow && " "}
                           </span>
                         )}
                       </td>

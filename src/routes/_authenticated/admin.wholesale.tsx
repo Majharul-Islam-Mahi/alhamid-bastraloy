@@ -1,8 +1,8 @@
 // src/routes/_authenticated/admin.wholesale.tsx
 // পাইকারি পাওনা খাতা — কাস্টমার তালিকা
-//
-// 🐛 FIX: N+1 query storm → partiesDueBatch
-// 🐛 FIX: Client-side serial → server RPC next_serial (race-safe)
+
+// FIX: N+1 query storm → partiesDueBatch
+// FIX: Client-side serial → server RPC next_serial (race-safe)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -55,7 +55,7 @@ function Wholesale() {
       ).data ?? []) as Party[],
   });
 
-  // 🚀 BATCH: 2 queries total
+  // BATCH: 2 queries total
   const { data: dues = {} } = useQuery({
     queryKey: ["party-dues-wholesale-batch", parties.length],
     enabled: parties.length > 0,
@@ -80,7 +80,7 @@ function Wholesale() {
     }
     setBusy(true);
     try {
-      // 🐛 RACE-SAFE: server RPC
+      // RACE-SAFE: server RPC
       const next = await fetchNextSerial("wholesale");
       const { error } = await supabase.from("parties").insert({
         serial: next,

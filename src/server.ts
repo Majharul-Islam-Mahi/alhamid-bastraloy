@@ -34,7 +34,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   const realError = consumeLastCapturedError();
   console.error("");
   console.error("╔══════════════════════════════════════════════════╗");
-  console.error("║  🚨 REAL SSR ERROR (from our dev wrapper)        ║");
+  console.error("║  � REAL SSR ERROR (from our dev wrapper)        ║");
   console.error("╚══════════════════════════════════════════════════╝");
   if (realError instanceof Error) {
     console.error("MESSAGE:", realError.message);
@@ -70,7 +70,7 @@ export default {
     } catch (error) {
       console.error("");
       console.error("╔══════════════════════════════════════════════════╗");
-      console.error("║  🚨 REAL TOP-LEVEL SSR ERROR                     ║");
+      console.error("║  � REAL TOP-LEVEL SSR ERROR                     ║");
       console.error("╚══════════════════════════════════════════════════╝");
       if (error instanceof Error) {
         console.error("MESSAGE:", error.message);

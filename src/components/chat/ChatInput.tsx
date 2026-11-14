@@ -137,7 +137,7 @@ export function ChatInput({
           </>
         )}
 
-        {/* 🎤 Voice recorder */}
+        {/*  Voice recorder */}
         {onSendVoice && <ChatVoiceRecorder onSend={onSendVoice} disabled={disabled || busy} />}
 
         <textarea

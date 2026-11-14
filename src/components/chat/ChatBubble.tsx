@@ -1,7 +1,7 @@
 // src/components/chat/ChatBubble.tsx
 import { Phone, PhoneMissed, FileText, Download, Play, Pause } from "lucide-react";
 import { useRef, useState } from "react";
-import { UserAvatar } from "@/components/shared/UserAvatar"; // 🎯 Added for Avatar
+import { UserAvatar } from "@/components/shared/UserAvatar"; // Added for Avatar
 
 type Message = {
   id: string;
@@ -74,7 +74,7 @@ function VoicePlayer({ url, duration, isMine, onPlayOnce }: { url: string; durat
     else {
       a.play();
       if (!hasPlayedRef.current && onPlayOnce) {
-        onPlayOnce(); // 🎯 Voice played = Seen
+        onPlayOnce(); // Voice played = Seen
         hasPlayedRef.current = true;
       }
     }
@@ -127,7 +127,7 @@ export function ChatBubble({ msg, isMine, onInfoClick, avatarPath, senderName = 
 
   return (
     <div className={`mb-1.5 flex items-end gap-1.5 ${isMine ? "justify-end" : "justify-start"}`}>
-      {/* 🎯 Avatar on the left for incoming messages */}
+      {/*  Avatar on the left for incoming messages */}
       {!isMine && (
         <div className="mb-0.5 shrink-0">
           <UserAvatar path={avatarPath} name={senderName} size={28} />
@@ -202,7 +202,7 @@ export function MessageInfoDialog({ msg, isMine, onClose }: { msg: Message; isMi
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="border-b px-4 py-3" style={{ borderColor: "#e9edef", backgroundColor: "#f0f2f5" }}><p className="text-base font-semibold" style={{ color: "#111b21" }}>Message info</p></div>
         <div className="max-h-40 overflow-y-auto p-4">
-          {msg.message_type === "voice" ? <p className="text-sm text-muted-foreground">🎤 Voice message ({fmtDur(msg.duration_seconds ?? 0)})</p> : msg.file_path ? <p className="text-sm text-muted-foreground">📎 {msg.file_name}</p> : <p className="whitespace-pre-wrap break-words text-sm" style={{ color: "#111b21" }}>{msg.message}</p>}
+          {msg.message_type === "voice" ? <p className="text-sm text-muted-foreground"> Voice message ({fmtDur(msg.duration_seconds ?? 0)})</p> : msg.file_path ? <p className="text-sm text-muted-foreground">� {msg.file_name}</p> : <p className="whitespace-pre-wrap break-words text-sm" style={{ color: "#111b21" }}>{msg.message}</p>}
         </div>
         <div className="border-t px-4 py-3" style={{ borderColor: "#e9edef" }}>
           <ul className="space-y-2">

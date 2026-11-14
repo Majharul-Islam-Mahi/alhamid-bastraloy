@@ -32,7 +32,7 @@ export function AvatarUploader({
   const [path, setPath] = useState(currentPath);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 🐛 FIX: sync prop → state (prevents avatar disappearing after F5)
+  // FIX: sync prop → state (prevents avatar disappearing after F5)
   useEffect(() => {
     setPath(currentPath);
   }, [currentPath]);

@@ -1,7 +1,7 @@
 // src/routes/_authenticated/admin.areas.tsx
 // এলাকা ব্যবস্থাপনা — কোন দিন কোন এলাকায় কালেকশন + Back button
-//
-// ⚠️ FIX: Inline edit এ React Query cache mutate হচ্ছিল। editBuffer state দিয়ে fix।
+
+// FIX: Inline edit এ React Query cache mutate হচ্ছিল। editBuffer state দিয়ে fix।
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -320,7 +320,7 @@ function AreasPage() {
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {a.active ? "✅ চালু" : "⏸ বন্ধ"}
+                          {a.active ? " চালু" : "⏸ বন্ধ"}
                         </button>
                         <div className="flex gap-1">
                           <button

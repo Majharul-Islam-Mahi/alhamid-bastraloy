@@ -171,7 +171,7 @@ function MigratePage() {
 
       {/* Info banner */}
       <div className="rounded-2xl border-l-4 border-accent bg-accent/5 p-4 text-sm">
-        <p className="font-semibold text-primary">🎯 পুরাতন পণ্যতে category বিতরণ</p>
+        <p className="font-semibold text-primary"> পুরাতন পণ্যতে category বিতরণ</p>
         <p className="mt-1 text-xs text-muted-foreground">
           নিচে multiple পণ্য select করে একসাথে category assign করতে পারবেন। অথবা প্রতিটি পণ্যের পাশে
           dropdown থেকে individual assign করুন।

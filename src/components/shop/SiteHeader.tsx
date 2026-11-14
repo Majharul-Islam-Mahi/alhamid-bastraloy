@@ -1,8 +1,8 @@
 // src/components/shop/SiteHeader.tsx
 // পাবলিক হেডার মেনু — desktop + mobile responsive + Chat icon
-//
-// 🐛 FIX: Logout এর পরে UI refresh হয় না (race condition with onAuthStateChange)
-//       Hard reload সবচেয়ে reliable
+
+// FIX: Logout এর পরে UI refresh হয় না (race condition with onAuthStateChange)
+// Hard reload সবচেয়ে reliable
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +29,7 @@ export function SiteHeader() {
   const chatUnread = chatData?.count ?? 0;
 
   async function logout() {
-    // 🐛 FIX: Hard reload ensures clean state (no stale cache, no race condition)
+    // FIX: Hard reload ensures clean state (no stale cache, no race condition)
     setOpen(false);
     try {
       await qc.cancelQueries();

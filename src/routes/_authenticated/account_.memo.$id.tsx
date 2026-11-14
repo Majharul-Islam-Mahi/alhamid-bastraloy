@@ -1,8 +1,8 @@
 // src/routes/_authenticated/account_.memo.$id.tsx
 // Customer — নিজের memo view (read-only) with premium design
 // [FIX] Renamed from account.memo.$id.tsx → account_.memo.$id.tsx
-//       Route: /_authenticated/account_/memo/$id (sibling of account.tsx)
-//       URL: /account/memo/{id}
+// Route: /_authenticated/account_/memo/$id (sibling of account.tsx)
+// URL: /account/memo/{id}
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -329,7 +329,7 @@ function CustomerMemoView() {
 
             {memo.note && (
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                📝 নোট: {memo.note}
+                � নোট: {memo.note}
               </p>
             )}
           </div>
@@ -359,7 +359,7 @@ function CustomerMemoView() {
         {/* Download / Info strip */}
         <div className="no-print rounded-2xl border-l-4 border-accent bg-accent/5 p-4 text-sm">
           <p className="font-semibold text-primary">
-            💡 কী করতে পারেন?
+             কী করতে পারেন?
           </p>
           <ul className="mt-1 ml-4 list-disc space-y-1 text-xs text-muted-foreground">
             <li>"প্রিন্ট" button চেপে A4 এ প্রিন্ট বা PDF save করুন</li>

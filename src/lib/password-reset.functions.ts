@@ -1,7 +1,7 @@
 // src/lib/password-reset.functions.ts
 // পাসওয়ার্ড ভুলে গেলে OTP দিয়ে self-service reset
-//
-// 🔒 SECURITY FIX: account enumeration vulnerability ছিল
+
+// SECURITY FIX: account enumeration vulnerability ছিল
 // আগে: "এই নাম্বারে কোনো অ্যাকাউন্ট নেই" error → attacker bulk phone দিয়ে check করতে পারত
 // এখন: যেকোনো response এ same message — account আছে বা নেই জানা যাবে না
 import { createServerFn } from "@tanstack/react-start";
@@ -40,7 +40,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
       );
     }
 
-    // 🔒 Always add small random delay — prevents timing attack
+    // Always add small random delay — prevents timing attack
     await randomDelay();
 
     // প্রোফাইল থেকে user_id খুঁজি
@@ -50,7 +50,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
       .eq("mobile", mobile)
       .maybeSingle();
 
-    // 🔒 SECURITY: Account না থাকলেও same success response ফেরত দেই
+    // SECURITY: Account না থাকলেও same success response ফেরত দেই
     // (fake challengeId generate করি, OTP পাঠাই না, কিন্তু UI একই দেখাবে)
     if (!prof) {
       // Fake challengeId — random UUID format

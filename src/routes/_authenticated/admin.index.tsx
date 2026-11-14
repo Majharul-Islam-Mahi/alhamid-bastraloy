@@ -1,8 +1,8 @@
 // src/routes/_authenticated/admin.index.tsx
 // অ্যাডমিন ড্যাশবোর্ড
-//
-// 🐛 FIX: threshold useState — stock page এ বদলালে Dashboard জানে না
-//       এখন: React Query দিয়ে threshold track + stock page invalidate
+
+// FIX: threshold useState — stock page এ বদলালে Dashboard জানে না
+// এখন: React Query দিয়ে threshold track + stock page invalidate
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -77,7 +77,7 @@ function Dashboard() {
 
   useKeyboardShortcuts();
 
-  // 🐛 FIX: threshold — React Query (stock page invalidate করে)
+  // FIX: threshold — React Query (stock page invalidate করে)
   const { data: threshold = 5 } = useQuery({
     queryKey: ["low-stock-threshold"],
     queryFn: () => readThreshold(),
@@ -114,7 +114,7 @@ function Dashboard() {
     },
   });
 
-  // 🐛 FIX: threshold in queryKey — stock page এ বদলালে refetch হবে
+  // FIX: threshold in queryKey — stock page এ বদলালে refetch হবে
   const { data: lowStockCount = 0 } = useQuery({
     queryKey: ["dashboard-low-stock-count", threshold],
     queryFn: async () => {

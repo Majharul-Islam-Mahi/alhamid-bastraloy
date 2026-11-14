@@ -21,7 +21,7 @@ function nowISO(): string {
 export const myMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // 🐛 3-STATE: mark admin's "sent" messages as "delivered"
+    // 3-STATE: mark admin's "sent" messages as "delivered"
     await supabaseAdmin
       .from("chat_messages")
       .update({ status: "delivered", delivered_at: nowISO() })
@@ -53,7 +53,7 @@ export const sendCustomerMessage = createServerFn({ method: "POST" })
         sender_role: "customer",
         message: data.message,
         message_type: "text",
-        status: "sent", // 🐛 was "delivered"
+        status: "sent", // was "delivered"
         delivered_at: null,
       })
       .select("*")
@@ -89,8 +89,7 @@ export const sendCustomerFile = createServerFn({ method: "POST" })
         sender_role: "customer",
         message: data.caption?.trim() || data.fileName,
         message_type: "file",
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
         file_path: data.filePath,
         file_name: data.fileName,
         file_size: data.fileSize,
@@ -129,10 +128,9 @@ export const sendCustomerVoice = createServerFn({ method: "POST" })
         customer_id: context.userId,
         sender_id: context.userId,
         sender_role: "customer",
-        message: `🎤 Voice message (${durLabel})`,
+        message: ` Voice message (${durLabel})`,
         message_type: "voice",
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
         file_path: data.filePath,
         file_name: "voice.webm",
         file_size: data.fileSize,
@@ -160,8 +158,7 @@ export const logCustomerCall = createServerFn({ method: "POST" })
         message: "Voice call",
         message_type: "call",
         call_status: data.callStatus,
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
       })
       .select("*")
       .single();
@@ -274,7 +271,7 @@ export const getConversation = createServerFn({ method: "POST" })
       throw new Error("শুধু মালিক বা মডারেটর এই কাজ করতে পারবেন");
     }
 
-    // 🐛 3-STATE: mark customer's "sent" messages as "delivered"
+    // 3-STATE: mark customer's "sent" messages as "delivered"
     await supabaseAdmin
       .from("chat_messages")
       .update({ status: "delivered", delivered_at: nowISO() })
@@ -330,8 +327,7 @@ export const sendAdminMessage = createServerFn({ method: "POST" })
         sender_role: "admin",
         message: data.message,
         message_type: "text",
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
       })
       .select("*")
       .single();
@@ -375,8 +371,7 @@ export const sendAdminFile = createServerFn({ method: "POST" })
         sender_role: "admin",
         message: data.caption?.trim() || data.fileName,
         message_type: "file",
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
         file_path: data.filePath,
         file_name: data.fileName,
         file_size: data.fileSize,
@@ -424,10 +419,9 @@ export const sendAdminVoice = createServerFn({ method: "POST" })
         customer_id: data.customerId,
         sender_id: context.userId,
         sender_role: "admin",
-        message: `🎤 Voice message (${durLabel})`,
+        message: ` Voice message (${durLabel})`,
         message_type: "voice",
-        status: "sent", // 🐛
-        delivered_at: null,
+        status: "sent", // delivered_at: null,
         file_path: data.filePath,
         file_name: "voice.webm",
         file_size: data.fileSize,

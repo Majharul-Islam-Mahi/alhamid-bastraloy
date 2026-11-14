@@ -1,7 +1,7 @@
 // src/components/admin/NoticePopup.tsx
 // ছোট notice popup — type-অনুযায়ী রঙ ও icon
-//
-// 🐛 FIX: 60s refetch এ notice object identity change হত
+
+// FIX: 60s refetch এ notice object identity change হত
 // → useEffect([visible, notice]) fire করত → 30s timer reset হত
 // → notice কখনো auto-dismiss হত না
 // এখন: dependency তে notice.id ব্যবহার — object identity ignore
@@ -116,7 +116,7 @@ export function NoticePopup() {
     refetchOnWindowFocus: true,
   });
 
-  // 🐛 notice object identity ignore — notice?.id দিয়ে trigger
+  // notice object identity ignore — notice?.id দিয়ে trigger
   const noticeId = notice?.id ?? null;
 
   // Show timer — 500ms delay after new notice
@@ -129,7 +129,7 @@ export function NoticePopup() {
     }
   }, [noticeId, dismissed]);
 
-  // 🐛 Auto-dismiss — dependency তে noticeId (object না)
+  // Auto-dismiss — dependency তে noticeId (object না)
   useEffect(() => {
     if (visible && noticeId) {
       const t = setTimeout(() => setVisible(false), AUTO_DISMISS_MS);

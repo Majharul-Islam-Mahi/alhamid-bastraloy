@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // src ও public ফোল্ডারের সব emoji-FIX comment পরিষ্কার করে
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
 
 const EMOJI = /[🐛🚀✅🔒⚡🔧📌🆕💡⚠️🎨🎤✨🗑️📱💾🔐📊📞🎯🔜🔴🟡🟢]/g;
 const ROOTS = ["src", "public"];
@@ -18,7 +18,9 @@ function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === ".output") {
+        continue;
+      }
       walk(full);
     } else if (SUFFIXES.has(path.extname(entry.name))) {
       clean(full);

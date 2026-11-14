@@ -1,8 +1,8 @@
 // src/hooks/use-session-timeout.ts
 // 8 hours inactivity timeout (was 30 min — too short for shop admin)
-//
-// 🐛 FIX: 30 min → 8 hours
-// 🐛 FIX: mousemove throttle 2s (browser lag prevention)
+
+// FIX: 30 min → 8 hours
+// FIX: mousemove throttle 2s (browser lag prevention)
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";

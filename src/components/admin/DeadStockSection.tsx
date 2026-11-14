@@ -235,7 +235,7 @@ export function DeadStockSection() {
       ) : rows.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed bg-card py-14 text-center">
           <PackageX className="mx-auto h-10 w-10" style={{ color: "#2d7a4f" }} />
-          <p className="mt-2 font-semibold text-success">🎉 কোনো dead stock নেই</p>
+          <p className="mt-2 font-semibold text-success">� কোনো dead stock নেই</p>
           <p className="mt-1 text-xs text-muted-foreground">
             শেষ {toBnDigits(threshold)} দিনে সব পণ্যই বিক্রি হয়েছে
           </p>

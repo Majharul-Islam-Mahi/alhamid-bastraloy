@@ -1,7 +1,7 @@
 // src/routes/_authenticated/admin.collection.history.tsx
 // কালেকশনের ইতিহাস — কে কবে কোথায় কত টাকা collect করলো
-//
-// 🐛 FIX: .in("collection_id", [...300+ ids]) — URL length limit hit করত (414 error)
+
+// FIX: .in("collection_id", [...300+ ids]) — URL length limit hit করত (414 error)
 // এখন: 200-item chunks এ divide করে query
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -63,7 +63,7 @@ function CollectionHistory() {
       ).data ?? ([] as Collection[]),
   });
 
-  // 🐛 Chunked fetch — URL length limit এড়াতে
+  // Chunked fetch — URL length limit এড়াতে
   const { data: items = [] } = useQuery({
     queryKey: ["collection-items-history", collections.map((c) => c.id).join(",")],
     enabled: collections.length > 0,

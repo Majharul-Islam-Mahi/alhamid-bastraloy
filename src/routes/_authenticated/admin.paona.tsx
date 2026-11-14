@@ -1,8 +1,8 @@
 // src/routes/_authenticated/admin.paona.tsx
 // খুচরা পাওনা খাতা — খুচরা কাস্টমারদের বাকির তালিকা
-//
-// 🐛 FIX: N+1 query storm (Promise.all partyDue) → partiesDueBatch (2 queries)
-// 🐛 FIX: Client-side serial suggestNextSerial → server RPC next_serial (race-safe)
+
+// FIX: N+1 query storm (Promise.all partyDue) → partiesDueBatch (2 queries)
+// FIX: Client-side serial suggestNextSerial → server RPC next_serial (race-safe)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -55,14 +55,14 @@ function Paona() {
       ).data ?? []) as Party[],
   });
 
-  // 🚀 BATCH: 2 queries total (regardless of party count)
+  // BATCH: 2 queries total (regardless of party count)
   const { data: dues = {} } = useQuery({
     queryKey: ["party-dues-retail-batch", parties.length],
     enabled: parties.length > 0,
     queryFn: () => partiesDueBatch(parties.map((p) => p.id)),
   });
 
-  // ✅ Bengali digit normalization
+  // Bengali digit normalization
   const filtered = parties.filter((p) => {
     const s = toEnDigits(q.trim().toLowerCase());
     if (!s) return true;
@@ -81,7 +81,7 @@ function Paona() {
     }
     setBusy(true);
     try {
-      // 🐛 RACE-SAFE: server-side RPC (next_serial), not client-side calculation
+      // RACE-SAFE: server-side RPC (next_serial), not client-side calculation
       const nextSerial = await fetchNextSerial("retail");
       const { error } = await supabase.from("parties").insert({
         kind: "retail",

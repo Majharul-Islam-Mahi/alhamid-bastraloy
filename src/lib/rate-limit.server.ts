@@ -1,9 +1,9 @@
 // src/lib/rate-limit.server.ts
 // Rate limiting helper — login/OTP এ abuse আটকায়
-//
+
 // ব্যবহার:
-//   const r = await checkRateLimit("login:01716782247", 5, 15);
-//   if (!r.ok) throw new Error(`অনেকবার চেষ্টা হয়েছে। ${r.retryAfter} সেকেন্ড পর আবার চেষ্টা করুন।`);
+// const r = await checkRateLimit("login:01716782247", 5, 15);
+// if (!r.ok) throw new Error(`অনেকবার চেষ্টা হয়েছে। ${r.retryAfter} সেকেন্ড পর আবার চেষ্টা করুন।`);
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 

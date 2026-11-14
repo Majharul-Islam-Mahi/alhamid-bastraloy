@@ -244,7 +244,7 @@ export function MemoShareDialog({ open, onClose, memo, items }: Props) {
             className="border-t px-3 py-2 text-[10px]"
             style={{ borderColor: "#dbcbb2", color: "#a83e2c" }}
           >
-            ⚠️ কাস্টমারের মোবাইল নাম্বার নেই — শুধু কপি করে নিজে পাঠান
+             কাস্টমারের মোবাইল নাম্বার নেই — শুধু কপি করে নিজে পাঠান
           </p>
         )}
       </div>

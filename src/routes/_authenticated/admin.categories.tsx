@@ -127,7 +127,7 @@ function CategoriesPage() {
 
       {/* Info */}
       <div className="rounded-2xl border-l-4 border-accent bg-accent/5 p-4 text-sm">
-        <p className="font-semibold text-primary">📁 ক্যাটাগরি ও সাব-ক্যাটাগরি</p>
+        <p className="font-semibold text-primary">� ক্যাটাগরি ও সাব-ক্যাটাগরি</p>
         <p className="mt-1 text-xs text-muted-foreground">
           যেমন: <strong>শাড়ি</strong> (parent) → <strong>জামদানি, কাতান, সফট সিল্ক</strong>{" "}
           (children)। স্টক পেজে এই category অনুযায়ী filter করা যাবে।

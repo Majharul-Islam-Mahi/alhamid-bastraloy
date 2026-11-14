@@ -1,7 +1,7 @@
 // src/routes/_authenticated/admin.dena.$id.tsx
 // সাপ্লায়ার লেজার — Tabs + Lazy load + summary cards
-//
-// 🐛 FIX: entries limit 2000 → 500 (view-optimized)
+
+// FIX: entries limit 2000 → 500 (view-optimized)
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -74,7 +74,7 @@ function SupplierPage() {
     queryFn: async () => (await supabase.from("parties").select("*").eq("id", id).single()).data,
   });
 
-  // 🐛 entries: 500 limit (was 2000)
+  // entries: 500 limit (was 2000)
   const { data: allEntries = [] } = useQuery({
     queryKey: ["supplier-entries", id],
     queryFn: async () =>
@@ -487,7 +487,7 @@ function SupplierPage() {
             </dl>
 
             <p className="mt-5 rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-xs text-muted-foreground">
-              ℹ️ সাপ্লায়ারের তথ্য edit করতে চাইলে সরাসরি DB edit করুন।
+              ℹ সাপ্লায়ারের তথ্য edit করতে চাইলে সরাসরি DB edit করুন।
             </p>
           </div>
         </TabsContent>

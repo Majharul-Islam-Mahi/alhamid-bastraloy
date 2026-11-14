@@ -42,7 +42,7 @@ export function ReportsWidget() {
           </h3>
         </div>
         <p className="mt-2 text-sm" style={{ color: "#7a6558" }}>
-          ✅ কোনো অপেক্ষমাণ রিপোর্ট নেই
+           কোনো অপেক্ষমাণ রিপোর্ট নেই
         </p>
       </div>
     );

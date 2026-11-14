@@ -1,9 +1,9 @@
 // src/hooks/use-keyboard-shortcuts.ts
 // Global keyboard shortcuts — Alt + অক্ষর
-//
-// 🐛 FIX: Shift key check missing — Alt+Shift+M also fired (browser এ conflict)
-// 🐛 FIX: e.repeat missing — key hold করলে multiple navigation fire হত
-// 🐛 FIX: modifier list — Ctrl/Meta ছাড়াও Shift+Alt+key ignore করি
+
+// FIX: Shift key check missing — Alt+Shift+M also fired (browser এ conflict)
+// FIX: e.repeat missing — key hold করলে multiple navigation fire হত
+// FIX: modifier list — Ctrl/Meta ছাড়াও Shift+Alt+key ignore করি
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -49,7 +49,7 @@ export function useKeyboardShortcuts() {
       // Ignore typing in inputs
       if (isTypingTarget(e.target)) return;
 
-      // 🐛 Only Alt+letter (no Ctrl, Meta, or Shift)
+      // Only Alt+letter (no Ctrl, Meta, or Shift)
       if (!e.altKey) return;
       if (e.ctrlKey || e.metaKey || e.shiftKey) return;
 

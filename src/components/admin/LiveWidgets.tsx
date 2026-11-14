@@ -108,7 +108,7 @@ export function LiveWidgets() {
             </li>
           ))}
           {topDues.length === 0 && (
-            <li className="py-4 text-center text-sm text-muted-foreground">কোনো বাকি নেই 🎉</li>
+            <li className="py-4 text-center text-sm text-muted-foreground">কোনো বাকি নেই �</li>
           )}
         </ul>
       </div>

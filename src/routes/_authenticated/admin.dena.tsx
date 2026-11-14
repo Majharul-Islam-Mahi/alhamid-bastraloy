@@ -1,8 +1,8 @@
 // src/routes/_authenticated/admin.dena.tsx
 // দেনা খাতা — সাপ্লায়ারদের তালিকা
-//
-// 🐛 FIX: N+1 dues calculation (single query per party) → suppliersDueBatch (2-4 queries)
-// 🐛 FIX: fetchNextSerial server RPC (already race-safe, no change needed)
+
+// FIX: N+1 dues calculation (single query per party) → suppliersDueBatch (2-4 queries)
+// FIX: fetchNextSerial server RPC (already race-safe, no change needed)
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -52,7 +52,7 @@ function Dena() {
       ).data ?? []) as Party[],
   });
 
-  // 🚀 BATCH: suppliersDueBatch (1 query per 200-chunk)
+  // BATCH: suppliersDueBatch (1 query per 200-chunk)
   const { data: dues = {} } = useQuery({
     queryKey: ["supplier-dues-batch", parties.length],
     enabled: parties.length > 0,

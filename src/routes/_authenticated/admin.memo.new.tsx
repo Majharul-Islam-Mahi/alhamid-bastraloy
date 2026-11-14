@@ -1,9 +1,9 @@
 // src/routes/_authenticated/admin.memo.new.tsx
 // নতুন মেমো
-//
-// 🐛 FIX: Retail_serial mode এ কোনো customer না থাকলে misleading
-// 🐛 FIX: Product name field না দেখলে category+price দিয়ে memo বানানোর চেষ্টা
-// 🐛 FIX: Auto-fallback to category name when product name empty
+
+// FIX: Retail_serial mode এ কোনো customer না থাকলে misleading
+// FIX: Product name field না দেখলে category+price দিয়ে memo বানানোর চেষ্টা
+// FIX: Auto-fallback to category name when product name empty
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -240,7 +240,7 @@ function NewMemo() {
     }
   }
 
-  // 🐛 Category select → auto-fill name if empty (from category label)
+  // Category select → auto-fill name if empty (from category label)
   function onCategoryChange(key: string, catId: string) {
     const it = items.find((i) => i.key === key);
     if (!it) return;
@@ -483,7 +483,7 @@ function NewMemo() {
             />
           </label>
 
-          {/* 🐛 FIX: Empty state for retail_serial */}
+          {/*  FIX: Empty state for retail_serial */}
           {memoType === "retail_serial" && allParties.length === 0 && (
             <div className="sm:col-span-2 rounded-xl border-2 border-yellow-500 bg-yellow-50 p-3">
               <div className="flex items-start gap-2">
@@ -563,7 +563,7 @@ function NewMemo() {
                 <input value={mobile} readOnly className="mt-1 block h-10 w-full rounded-md border bg-muted/30 px-3 tabular-nums" />
               </label>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                🎯 সিরিয়াল: <strong className="text-primary">{toBnDigits(partySerial)}</strong>
+                 সিরিয়াল: <strong className="text-primary">{toBnDigits(partySerial)}</strong>
               </p>
             </>
           )}
@@ -595,7 +595,7 @@ function NewMemo() {
 
         {previousDue !== 0 && (
           <p className="mt-3 rounded-lg bg-accent/15 p-3 text-sm">
-            📊 পূর্বের বাকি: <strong>{taka(previousDue)}</strong>
+             পূর্বের বাকি: <strong>{taka(previousDue)}</strong>
           </p>
         )}
       </div>
@@ -669,7 +669,7 @@ function NewMemo() {
                     nameEmptyButCat ? "border-yellow-500 bg-yellow-50/40" :
                     notInStock ? "border-yellow-500 bg-yellow-50/40" : ""
                   }`}
-                  placeholder="👉 পণ্যের নাম টাইপ করুন (স্টক থেকে suggestion আসবে)"
+                  placeholder="� পণ্যের নাম টাইপ করুন (স্টক থেকে suggestion আসবে)"
                 />
                 <datalist id={datalistId}>
                   {products.map((p) => (
@@ -747,7 +747,7 @@ function NewMemo() {
 
               {hint && (
                 <p className="mt-1 rounded-md bg-accent/10 px-2 py-1 text-[10px] text-primary">
-                  💡 {hint}
+                   {hint}
                 </p>
               )}
             </div>

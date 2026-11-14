@@ -1,12 +1,12 @@
 // src/lib/otp-service.ts
 // OTP পাঠানোর সার্ভিস — একাধিক চ্যানেল সাপোর্ট করে
-//
+
 // চ্যানেল পরিবর্তন করতে .env এ সেট করুন:
-//   OTP_CHANNEL="demo"        → শুধু স্ক্রিনে দেখাবে (ডেভেলপমেন্ট)
-//   OTP_CHANNEL="console"     → সার্ভার কনসোল লগে দেখাবে
-//   OTP_CHANNEL="whatsapp"    → WhatsApp Cloud API (Meta)
-//   OTP_CHANNEL="sms_ssl"     → SSL Wireless (বাংলাদেশ)
-//   OTP_CHANNEL="sms_bulkbd"  → Bulk SMS BD (বাংলাদেশ)
+// OTP_CHANNEL="demo"        → শুধু স্ক্রিনে দেখাবে (ডেভেলপমেন্ট)
+// OTP_CHANNEL="console"     → সার্ভার কনসোল লগে দেখাবে
+// OTP_CHANNEL="whatsapp"    → WhatsApp Cloud API (Meta)
+// OTP_CHANNEL="sms_ssl"     → SSL Wireless (বাংলাদেশ)
+// OTP_CHANNEL="sms_bulkbd"  → Bulk SMS BD (বাংলাদেশ)
 
 export type OtpChannel = "demo" | "console" | "whatsapp" | "sms_ssl" | "sms_bulkbd";
 

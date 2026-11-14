@@ -156,7 +156,7 @@ function AccountPage() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-base font-bold" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
-              {chatUnread > 0 ? `🎉 ${toBnDigits(chatUnread)}টি নতুন message` : "মালিক / ম্যানেজারের সাথে কথা বলুন"}
+              {chatUnread > 0 ? `� ${toBnDigits(chatUnread)}টি নতুন message` : "মালিক / ম্যানেজারের সাথে কথা বলুন"}
             </p>
             <p className="mt-1 text-xs" style={{ color: "#7a6558" }}>
               {chatUnread > 0 ? "ট্যাপ করে পড়ুন →" : "যেকোনো প্রশ্ন বা সমস্যা সরাসরি লিখুন"}

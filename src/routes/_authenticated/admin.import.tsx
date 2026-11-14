@@ -383,7 +383,7 @@ function ImportPage() {
 
       {/* Info */}
       <div className="rounded-2xl border-l-4 border-accent bg-accent/5 p-4 text-sm">
-        <p className="font-semibold text-primary">📥 ২৬-৩০ বছরের পুরাতন ডেটা import</p>
+        <p className="font-semibold text-primary">� ২৬-৩০ বছরের পুরাতন ডেটা import</p>
         <p className="mt-1 text-xs text-muted-foreground">
           <strong>Recommended order:</strong> প্রথমে পার্টি → তারপর মেমো → তারপর খুচরা খাতা → দেনা
           খাতা → হাওলাত। কারণ memo/supplier/hawlat party_serial দিয়ে match হয়।

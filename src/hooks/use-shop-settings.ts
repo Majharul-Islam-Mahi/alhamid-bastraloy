@@ -1,13 +1,13 @@
 // src/hooks/use-shop-settings.ts
 // Shop settings + image upload
-//
-// 🐛 FIX: uploadShopImage — MIME type check ছিল না, size check ছিল না
-//       → user 500MB video upload করতে পারত, DB/storage bloated
-// 🐛 FIX: getPublicUrl(null) — null guard added
+
+// FIX: uploadShopImage — MIME type check ছিল না, size check ছিল না
+// → user 500MB video upload করতে পারত, DB/storage bloated
+// FIX: getPublicUrl(null) — null guard added
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-// ✅ Constants — enforce limits
+// Constants — enforce limits
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_IMAGE_MIME = [
   "image/jpeg",
@@ -44,7 +44,7 @@ export function validateShopImage(file: File): void {
 
 /**
  * Upload image to shop-images bucket
- * 🐛 FIX: now validates MIME + size before upload
+ *  FIX: now validates MIME + size before upload
  */
 export async function uploadShopImage(file: File): Promise<string> {
   validateShopImage(file);

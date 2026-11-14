@@ -1,9 +1,9 @@
 // src/routes/_authenticated/admin.party.$id.tsx
 // কাস্টমার হিসাব — Full history + lazy load + optional date filter
-//
-// 🐛 FIX: Opening balance query — 2 sequential awaits → Promise.all
-// 🐛 FIX: Memos limit 2000 → 500 (view-optimized)
-// 🐛 FIX: Deposits limit 2000 → 500
+
+// FIX: Opening balance query — 2 sequential awaits → Promise.all
+// FIX: Memos limit 2000 → 500 (view-optimized)
+// FIX: Deposits limit 2000 → 500
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -159,7 +159,7 @@ function PartyPage() {
     return allDeposits.filter((d) => d.entry_date >= from && d.entry_date <= to);
   }, [allDeposits, useDateFilter, from, to]);
 
-  // 🚀 OPTIMIZED: opening balance — Promise.all (parallel queries)
+  // OPTIMIZED: opening balance — Promise.all (parallel queries)
   const { data: opening = 0 } = useQuery({
     queryKey: ["party-opening-v2", id, from, useDateFilter],
     enabled: !!id && useDateFilter,
@@ -755,7 +755,7 @@ function PartyPage() {
             </dl>
 
             <p className="mt-5 rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-xs text-muted-foreground">
-              ℹ️ তথ্য পরিবর্তন করতে চাইলে Users page অথবা সরাসরি DB edit করুন।
+              ℹ তথ্য পরিবর্তন করতে চাইলে Users page অথবা সরাসরি DB edit করুন।
             </p>
           </div>
         </TabsContent>

@@ -1,7 +1,7 @@
 // src/routes/_authenticated/admin.halkhata.tsx
 // নোটিশ ব্যবস্থাপনা — হালখাতা, ছাড়, জরুরি, অনুষ্ঠান সহ সব ধরনের + Back button
-//
-// 🐛 FIX: saveNotice-এ race condition ছিল
+
+// FIX: saveNotice-এ race condition ছিল
 // আগে: পুরানো notice deactivate → নতুন insert (insert fail হলে পুরানো হারিয়ে যেত)
 // এখন: নতুন insert আগে → সফল হলে পুরানো deactivate
 import { createFileRoute } from "@tanstack/react-router";
@@ -36,43 +36,43 @@ export const Route = createFileRoute("/_authenticated/admin/halkhata")({
 const NOTICE_TYPES = [
   {
     value: "general",
-    label: "🔔 সাধারণ ঘোষণা",
+    label: "� সাধারণ ঘোষণা",
     icon: <Info className="h-4 w-4" />,
     preview: "#c9924a",
   },
   {
     value: "halkhata",
-    label: "🎉 হালখাতা",
+    label: "� হালখাতা",
     icon: <Sparkles className="h-4 w-4" />,
     preview: "#dc2626",
   },
   {
     value: "chadrat",
-    label: "🟢 চাদরাত",
+    label: " চাদরাত",
     icon: <Sparkles className="h-4 w-4" />,
     preview: "#10b981",
   },
   {
     value: "discount",
-    label: "💝 ছাড় / অফার",
+    label: "� ছাড় / অফার",
     icon: <Percent className="h-4 w-4" />,
     preview: "#ec4899",
   },
   {
     value: "urgent",
-    label: "⚠️ জরুরি",
+    label: " জরুরি",
     icon: <AlertTriangle className="h-4 w-4" />,
     preview: "#dc2626",
   },
   {
     value: "event",
-    label: "📅 অনুষ্ঠান",
+    label: "� অনুষ্ঠান",
     icon: <Calendar className="h-4 w-4" />,
     preview: "#3b82f6",
   },
   {
     value: "maintenance",
-    label: "🛠️ দোকান বন্ধ",
+    label: "� দোকান বন্ধ",
     icon: <Wrench className="h-4 w-4" />,
     preview: "#6b7280",
   },
@@ -144,7 +144,7 @@ function HalkhataPage() {
     }
     setBusy(true);
     try {
-      // 🐛 FIX: নতুন insert আগে করি
+      // FIX: নতুন insert আগে করি
       const { data: inserted, error: insertErr } = await supabase
         .from("notices")
         .insert({
@@ -165,7 +165,7 @@ function HalkhataPage() {
         await supabase.from("notices").update({ active: false }).eq("id", current.id);
       }
 
-      toast.success("নোটিশ চালু হয়েছে — সবাই দেখবে ✅");
+      toast.success("নোটিশ চালু হয়েছে — সবাই দেখবে ");
       qc.invalidateQueries({ queryKey: ["active-notice"] });
       qc.invalidateQueries({ queryKey: ["admin-notice-popup"] });
       qc.invalidateQueries({ queryKey: ["customer-notice-banner"] });
@@ -205,7 +205,7 @@ function HalkhataPage() {
   function waMessage(name?: string) {
     const greeting = name ? `প্রিয় ${name},\n\n` : "";
     const typeCfg = NOTICE_TYPES.find((t) => t.value === notice.notice_type);
-    return `${typeCfg?.label ?? "🔔 নোটিশ"} — ${notice.title}\n\n${greeting}${notice.message}\n\n— ${SHOP.name}\n${SHOP.address}\n${SHOP.managerPhone}`;
+    return `${typeCfg?.label ?? "� নোটিশ"} — ${notice.title}\n\n${greeting}${notice.message}\n\n— ${SHOP.name}\n${SHOP.address}\n${SHOP.managerPhone}`;
   }
 
   function openWhatsApp(mobile: string, name: string) {
@@ -243,7 +243,7 @@ function HalkhataPage() {
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold text-primary">✅ নোটিশ চালু আছে</p>
+              <p className="text-sm font-semibold text-primary"> নোটিশ চালু আছে</p>
               <p className="mt-1 text-xs text-muted-foreground">{current.title}</p>
             </div>
             <Button variant="outline" size="sm" onClick={deactivate} disabled={busy}>

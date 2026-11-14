@@ -1,15 +1,15 @@
 // src/lib/audit-log.server.ts
 // Audit log helper — sensitive actions track করে
-//
+
 // ব্যবহার:
-//   await logAction({
-//     actorId: context.userId,
-//     action: "user.create",
-//     targetType: "user",
-//     targetId: newUserId,
-//     targetName: "মাহমুদুল হক",
-//     details: { role: "customer" },
-//   });
+// await logAction({
+// actorId: context.userId,
+// action: "user.create",
+// targetType: "user",
+// targetId: newUserId,
+// targetName: "মাহমুদুল হক",
+// details: { role: "customer" },
+// });
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 

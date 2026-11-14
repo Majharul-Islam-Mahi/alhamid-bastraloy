@@ -110,7 +110,7 @@ export function BulkCategoryAssignModal({ open, onClose, products, categories, o
 
       if (error) throw error;
 
-      toast.success(`${toBnDigits(ids.length)} টি পণ্যতে ক্যাটাগরি assign হয়েছে ✅`);
+      toast.success(`${toBnDigits(ids.length)} টি পণ্যতে ক্যাটাগরি assign হয়েছে `);
       onSaved();
       onClose();
     } catch (e) {
@@ -221,7 +221,7 @@ export function BulkCategoryAssignModal({ open, onClose, products, categories, o
           {/* Selected summary */}
           {selected.size > 0 && (
             <p className="mt-2 text-[11px] text-primary">
-              🎯 {toBnDigits(selected.size)} টি পণ্য select করা হয়েছে — উপরে ক্যাটাগরি বেছে Assign
+               {toBnDigits(selected.size)} টি পণ্য select করা হয়েছে — উপরে ক্যাটাগরি বেছে Assign
               চাপুন
             </p>
           )}

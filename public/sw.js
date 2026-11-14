@@ -1,8 +1,8 @@
 // public/sw.js
 // Service Worker — PWA static asset cache only (NOT HTML)
-//
-// 🐛 FIX: HTML ("/") cache করা বন্ধ — পুরানো project এর content leak হবে না
-// 🐛 FIX: Navigate requests ignore — SPA always network from
+
+// FIX: HTML ("/") cache করা বন্ধ — পুরানো project এর content leak হবে না
+// FIX: Navigate requests ignore — SPA always network from
 
 const CACHE_NAME = "alhamid-v3-2026-11-12";
 const STATIC_ASSETS = [
@@ -36,7 +36,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // 🐛 Skip: supabase, server functions, HTML navigation, root path
+  // Skip: supabase, server functions, HTML navigation, root path
   if (
     url.hostname.includes("supabase") ||
     url.pathname.startsWith("/_serverFn") ||

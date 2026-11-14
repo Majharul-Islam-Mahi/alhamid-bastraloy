@@ -1,8 +1,8 @@
 // src/routes/_authenticated/admin.memo.index.tsx
 // মেমো বই — বাম পাশে পাইকারি history, ডান পাশে খুচরা history
-//
-// 🐛 FIX: Quick Print/Open buttons on hover (list এ থেকেই)
-// 🐛 FIX: Better pending memo visibility
+
+// FIX: Quick Print/Open buttons on hover (list এ থেকেই)
+// FIX: Better pending memo visibility
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -280,7 +280,7 @@ function MemoRowItem({ memo: m }: { memo: MemoRow }) {
         </div>
       </Link>
 
-      {/* 🐛 Quick actions — hover এ show */}
+      {/*  Quick actions — hover এ show */}
       <div className="no-print flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <Link
           to="/admin/memo/$id"

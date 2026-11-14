@@ -161,7 +161,7 @@ export function SupplierReportSection({ from, to }: Props) {
         />
         <ListBox
           title="টপ ১০ সাপ্লায়ার (দেনা অনুযায়ী)"
-          emptyText="কোনো দেনা নেই 🎉"
+          emptyText="কোনো দেনা নেই �"
           items={topDues.map((s) => ({
             key: s.id,
             primary: s.shop_name,

@@ -221,7 +221,7 @@ export function UnitSettingsModal({ product, onClose, onSaved }: Props) {
 
           {/* Preview */}
           <div className="rounded-lg border-l-4 border-accent bg-accent/5 p-3 text-xs">
-            <p className="font-semibold text-primary">📊 Preview</p>
+            <p className="font-semibold text-primary"> Preview</p>
             <p className="mt-1 text-muted-foreground">
               Memo তে এই product select করলে dropdown এ দেখাবে:{" "}
               <strong className="text-primary">

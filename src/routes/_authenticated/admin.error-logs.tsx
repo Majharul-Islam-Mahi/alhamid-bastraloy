@@ -221,7 +221,7 @@ function ErrorLogsPage() {
         <div className="rounded-2xl border-2 border-dashed bg-card py-16 text-center">
           <CheckCircle2 className="mx-auto h-10 w-10" style={{ color: "#2d7a4f" }} />
           <p className="mt-2" style={{ color: "#7a6558" }}>
-            🎉 কোনো error নেই
+            � কোনো error নেই
           </p>
         </div>
       ) : (
@@ -255,7 +255,7 @@ function ErrorLogsPage() {
                     </p>
                     <p className="mt-0.5 text-xs" style={{ color: "#7a6558" }}>
                       {cfg.label} · {new Date(log.created_at).toLocaleString("bn-BD")}
-                      {log.resolved && " · ✅ Resolved"}
+                      {log.resolved && " ·  Resolved"}
                     </p>
                   </div>
                   {isOpen ? (

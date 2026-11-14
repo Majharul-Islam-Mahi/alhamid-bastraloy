@@ -1,9 +1,9 @@
 // src/lib/ledger.ts
 // পার্টির (কাস্টমার/সাপ্লায়ার) বাকি হিসাব ক্যালকুলেশন
-//
-// 🐛 FIX: partiesDue (old) — N+1 query storm
-//    ৩০০ parties = ৩০০ parallel queries = Supabase rate limit + slow
-// ✅ partiesDueBatch (new) — ২ queries total, ২০০-id chunks
+
+// FIX: partiesDue (old) — N+1 query storm
+// ৩০০ parties = ৩০০ parallel queries = Supabase rate limit + slow
+// partiesDueBatch (new) — ২ queries total, ২০০-id chunks
 import { supabase } from "@/integrations/supabase/client";
 
 const CHUNK_SIZE = 200;
@@ -48,7 +48,7 @@ export async function partiesDue(partyIds: string[]): Promise<Record<string, num
 }
 
 /**
- * 🚀 BATCH — একাধিক পার্টির বাকি ২ queries এ (300+ parties এর জন্যও safe)
+ *  BATCH — একাধিক পার্টির বাকি ২ queries এ (300+ parties এর জন্যও safe)
  *
  * সব memos + সব deposits একসাথে fetch করে, তারপর client-side aggregate।
  * ২০০-id chunks এ ভাগ করে URL length limit এড়ায়।

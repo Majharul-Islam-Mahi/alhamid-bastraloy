@@ -421,8 +421,8 @@ function AdminMessages() {
                         )}
                       </div>
                       <p className="mt-0.5 truncate text-xs" style={{ color: "#7a6558" }}>
-                        {c.last_type === "call" && "📞 "}
-                        {c.last_type === "voice" && "🎤 "}
+                        {c.last_type === "call" && " "}
+                        {c.last_type === "voice" && " "}
                         {c.last_from === "admin" && "আপনি: "}
                         {c.last_message}
                       </p>
@@ -499,9 +499,9 @@ function AdminMessages() {
                             msg={{ ...m, file_url: signedMap[m.id] ?? null }}
                             isMine={m.sender_role === "admin"}
                             onInfoClick={(mm) => setInfoMsg(mm as Message)}
-                            avatarPath={selectedConv?.avatar_path ?? customer?.avatar_path} // 🎯 Avatar Path
-                            senderName={party?.shop_name || customer?.full_name || "Customer"} // 🎯 Name for fallback avatar
-                            onVoicePlay={() => markSeen({ data: { customerId: selected! } })} // 🎯 Voice Play = Seen
+                            avatarPath={selectedConv?.avatar_path ?? customer?.avatar_path} // Avatar Path
+                            senderName={party?.shop_name || customer?.full_name || "Customer"} // Name for fallback avatar
+                            onVoicePlay={() => markSeen({ data: { customerId: selected! } })} // Voice Play = Seen
                           />
                         ))}
                       </div>

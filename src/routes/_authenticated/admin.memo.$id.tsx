@@ -1,10 +1,10 @@
 // src/routes/_authenticated/admin.memo.$id.tsx
 // মেমো দেখুন, edit, প্রিন্ট, confirm, void, শেয়ার (WhatsApp/SMS) — Unit column + signature
-//
-// 🐛 FIX: saveEdits() — delete-then-insert pattern → data loss risk
-//       (delete সফল + insert fail হলে সব items হারিয়ে যায়)
-//       এখন: safest path — প্রথমে insert নতুন items, তারপর delete পুরানো
-// 🐛 FIX: taka(it.price) — string passed to number function → taka(num(...))
+
+// FIX: saveEdits() — delete-then-insert pattern → data loss risk
+// (delete সফল + insert fail হলে সব items হারিয়ে যায়)
+// এখন: safest path — প্রথমে insert নতুন items, তারপর delete পুরানো
+// FIX: taka(it.price) — string passed to number function → taka(num(...))
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -186,7 +186,7 @@ function MemoView() {
     navigate({ to: "/admin/memo" });
   }
 
-  // 🐛 SAFER saveEdits — insert-first, delete-after
+  // SAFER saveEdits — insert-first, delete-after
   async function saveEdits() {
     if (!memo) return;
     setBusy(true);

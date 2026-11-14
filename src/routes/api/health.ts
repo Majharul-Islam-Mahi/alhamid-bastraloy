@@ -1,8 +1,8 @@
 // src/routes/api/health.ts
 // Health check endpoint + Uptime record save
 // Browser এ visit করুন: /api/health
-//
-// ⚠️ Cloudflare Workers / Edge runtime এ `process.memoryUsage()` নেই।
+
+// Cloudflare Workers / Edge runtime এ `process.memoryUsage()` নেই।
 // সব process.* call guard করা হয়েছে যাতে edge এ crash না হয়।
 import { createFileRoute } from "@tanstack/react-router";
 

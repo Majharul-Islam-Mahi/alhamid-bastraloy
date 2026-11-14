@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const Tabs = TabsPrimitive.Root;
 
-// ✅ FIX: overflow-hidden যুক্ত — active tab আর parent এর বাইরে বেরোবে না
+// FIX: overflow-hidden যুক্ত — active tab আর parent এর বাইরে বেরোবে না
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
@@ -21,7 +21,7 @@ const TabsList = React.forwardRef<
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
 
-// ✅ FIX: h-full + h-8 — tab fixed height এ থাকে, container এর সাথে মিলে
+// FIX: h-full + h-8 — tab fixed height এ থাকে, container এর সাথে মিলে
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>

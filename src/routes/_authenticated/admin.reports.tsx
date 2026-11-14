@@ -1,9 +1,9 @@
 // src/routes/_authenticated/admin.reports.tsx
 // রিপোর্ট — Presets + Summary + Chart + P&L + Dead Stock + Supplier/Collection + Excel/PDF Export
-//
-// 🐛 FIX: top dues query — full memos + deposits scan → party-wise limit via SQL
-// 🐛 FIX: as any cast removed — types now proper
-// 🐛 FIX: monthly sales — bounded 6-month window (already OK), but optimized with index
+
+// FIX: top dues query — full memos + deposits scan → party-wise limit via SQL
+// FIX: as any cast removed — types now proper
+// FIX: monthly sales — bounded 6-month window (already OK), but optimized with index
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useRef } from "react";
@@ -145,8 +145,8 @@ function ReportsPage() {
     },
   });
 
-  // 🐛 FIX: top dues — bounded fetch (only confirmed memos with unpaid balance + deposits for party)
-  //    Only fetch parties with potential dues by SQL-level filtering on memos (unpaid > 0)
+  // FIX: top dues — bounded fetch (only confirmed memos with unpaid balance + deposits for party)
+  // Only fetch parties with potential dues by SQL-level filtering on memos (unpaid > 0)
   const { data: topDues = [] } = useQuery({
     queryKey: ["report-top-dues-v3"],
     queryFn: async () => {
@@ -229,8 +229,8 @@ function ReportsPage() {
     },
   });
 
-  // 🐛 FIX: category sales — properly typed (no as any)
-  //    Now uses products.category_id directly from typed Database schema
+  // FIX: category sales — properly typed (no as any)
+  // Now uses products.category_id directly from typed Database schema
   const { data: categorySales = [] } = useQuery({
     queryKey: ["report-category-sales-v2", from, to],
     queryFn: async () => {
@@ -563,7 +563,7 @@ function ReportsPage() {
               value: taka(b.due),
               valueTone: "destructive",
             }))}
-            emptyText="কোনো বাকি নেই 🎉"
+            emptyText="কোনো বাকি নেই �"
             onExport={exportTopDuesCSV}
           />
 
@@ -657,7 +657,7 @@ function ReportsPage() {
           </Button>
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
-          💡 CSV file Excel / Google Sheets এ খুলবে — বাংলা ঠিক দেখাবে। PDF button এ browser print
+           CSV file Excel / Google Sheets এ খুলবে — বাংলা ঠিক দেখাবে। PDF button এ browser print
           dialog খুলবে — "Save as PDF" select করুন।
         </p>
       </div>
