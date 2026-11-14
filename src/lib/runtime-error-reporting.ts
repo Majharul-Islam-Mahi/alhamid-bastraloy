@@ -56,10 +56,10 @@ export function reportRuntimeError(
 }
 
 // পুরনো name compatibility — __root.tsx এটা এখনো import করে
-// এটা থাকলে __root.tsx-এ কিছু বদলাতে হবে না
+// যেকোনো context object accept করে (componentStack, boundary ইত্যাদি)
 export function reportLovableError(
   error: unknown,
-  errorInfo: { componentStack?: string | null } = {},
+  errorInfo: Record<string, unknown> = {},
 ): void {
-  reportRuntimeError(error, { componentStack: errorInfo?.componentStack ?? null });
+  reportRuntimeError(error, errorInfo);
 }
