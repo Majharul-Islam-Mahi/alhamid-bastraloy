@@ -41,7 +41,7 @@ import { chatUnreadCount } from "@/lib/chat.functions";
 import { toast } from "sonner";
 import { NoticePopup } from "@/components/admin/NoticePopup";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
-import { UserAvatar } from "@/components/shared/UserAvatar";
+import { AvatarUploader } from "@/components/shared/AvatarUploader";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "ড্যাশবোর্ড — আল হামিদ বস্ত্রালয়" }] }),
@@ -93,7 +93,7 @@ function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Safe avatar path — type might not include it, so cast
+  // Safe avatar path
   const avatarPath =
     (me as { avatar_path?: string | null } | null | undefined)?.avatar_path ?? null;
 
@@ -231,14 +231,15 @@ function AdminLayout() {
             </Link>
           </nav>
 
-          {/* Sidebar Footer with Avatar */}
+          {/* Sidebar Footer with Avatar (clickable) */}
           <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
             <div className="flex items-center gap-3">
-              <UserAvatar
-                path={avatarPath}
+              <AvatarUploader
+                userId={me.id}
+                currentPath={avatarPath}
                 name={me.full_name ?? "?"}
-                size={38}
-                borderColor="#c9924a"
+                size={40}
+                canEdit={true}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold" style={{ color: "#f2e8d5" }}>
@@ -273,11 +274,12 @@ function AdminLayout() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <UserAvatar
-              path={avatarPath}
+            <AvatarUploader
+              userId={me.id}
+              currentPath={avatarPath}
               name={me.full_name ?? "?"}
               size={32}
-              borderColor="#c9924a"
+              canEdit={true}
             />
             <p
               className="min-w-0 flex-1 truncate text-sm font-semibold"
@@ -389,14 +391,15 @@ function AdminLayout() {
                   </Link>
                 </nav>
 
-                {/* Mobile Drawer Footer with Avatar */}
+                {/* Mobile Drawer Footer with Avatar (clickable) */}
                 <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
                   <div className="flex items-center gap-3">
-                    <UserAvatar
-                      path={avatarPath}
+                    <AvatarUploader
+                      userId={me.id}
+                      currentPath={avatarPath}
                       name={me.full_name ?? "?"}
-                      size={40}
-                      borderColor="#c9924a"
+                      size={44}
+                      canEdit={true}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold" style={{ color: "#f2e8d5" }}>

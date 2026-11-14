@@ -95,7 +95,13 @@ function Users() {
   async function submitNew() {
     setBusy(true);
     try {
-      await createAcc({ data: f });
+      // empty area_id পাঠাব না — শুধু valid uuid হলে পাঠাব
+      await createAcc({
+        data: {
+          ...f,
+          area_id: f.area_id || undefined,
+        },
+      });
       toast.success(
         f.role === "customer"
           ? "কাস্টমার তৈরি হয়েছে — সিরিয়াল সার্ভার থেকে দেওয়া হবে"
@@ -312,6 +318,8 @@ function Users() {
                     userId={u.id}
                     currentPath={u.avatar_path}
                     name={u.full_name}
+                    size={40}
+                    canEdit={true}
                   />
                 </td>
                 <td className="p-2 font-mono">{u.serial ? toBnDigits(u.serial) : "—"}</td>
@@ -352,7 +360,6 @@ function Users() {
         </table>
       </div>
 
-      {/* Password Reset Modal */}
       {resetTarget && !otpDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-xl bg-card p-5 shadow-xl">
@@ -392,7 +399,6 @@ function Users() {
         </div>
       )}
 
-      {/* Reset OTP */}
       <DestructiveOtpDialog
         open={otpDialogOpen}
         onClose={() => {
@@ -408,7 +414,6 @@ function Users() {
         }
       />
 
-      {/* Delete OTP */}
       {deleteTarget && (
         <DestructiveOtpDialog
           open={!!deleteTarget}
