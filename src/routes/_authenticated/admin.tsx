@@ -1,6 +1,5 @@
 // src/routes/_authenticated/admin.tsx
 // অ্যাডমিন লেআউট — Desktop Sidebar + Mobile Drawer + Notice Popup + ConfirmProvider + Badges
-// [UPDATED] Nav order: daily-use first, admin setup last
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -42,20 +41,15 @@ import { chatUnreadCount } from "@/lib/chat.functions";
 import { toast } from "sonner";
 import { NoticePopup } from "@/components/admin/NoticePopup";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "ড্যাশবোর্ড — আল হামিদ বস্ত্রালয়" }] }),
   component: AdminLayout,
 });
 
-// ============================================================
-// NAV ORDER — daily-use first, admin/setup last
-// ============================================================
 const nav = [
-  // --- TOP: Dashboard ---
   { to: "/admin", label: "ড্যাশবোর্ড", icon: LayoutDashboard, exact: true },
-
-  // --- DAILY USE (most frequent) ---
   { to: "/admin/khata", label: "খুচরা খাতা", icon: NotebookPen },
   { to: "/admin/cash", label: "ক্যাশ", icon: Wallet },
   { to: "/admin/memo", label: "মেমো বই", icon: BookOpen },
@@ -65,39 +59,22 @@ const nav = [
   { to: "/admin/calculator", label: "ক্যালকুলেটর", icon: Calculator },
   { to: "/admin/calendar", label: "ক্যালেন্ডার", icon: CalendarLucide },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
-
-  // --- STOCK / INVENTORY ---
   { to: "/admin/stock", label: "স্টক", icon: Package },
   { to: "/admin/categories", label: "ক্যাটাগরি", icon: FolderTree },
   { to: "/admin/paona", label: "খুচরা পাওনা", icon: ReceiptText },
-
-  // --- CUSTOMER / AREA ---
   { to: "/admin/users", label: "ইউজার ও কাস্টমার", icon: Users },
   { to: "/admin/areas", label: "এলাকা", icon: MapPin },
-
-  // --- COMMUNICATION ---
   { to: "/admin/halkhata", label: "নোটিশ", icon: Bell },
-
-  // --- REPORTS ---
   { to: "/admin/reports", label: "রিপোর্ট", icon: TrendingUp },
-  {
-    to: "/admin/reports-list",
-    label: "কাস্টমার রিপোর্ট",
-    icon: MessageSquareWarning,
-  },
-
-  // --- TOOLS / IMPORT ---
+  { to: "/admin/reports-list", label: "কাস্টমার রিপোর্ট", icon: MessageSquareWarning },
   { to: "/admin/migrate", label: "Migrate Tool", icon: Wand2 },
   { to: "/admin/import", label: "Historical Import", icon: Upload },
-
-  // --- ADMIN / DIAGNOSTICS ---
   { to: "/admin/settings", label: "সেটিংস", icon: SettingsIcon },
   { to: "/admin/audit-logs", label: "Activity Log", icon: History },
   { to: "/admin/error-logs", label: "Error Log", icon: AlertTriangle },
   { to: "/admin/uptime", label: "Uptime", icon: Activity },
 ] as const;
 
-// Moderator অনুমোদিত page
 const allowedForModerator = [
   "/admin",
   "/admin/khata",
@@ -116,7 +93,10 @@ function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Pending reports count
+  // Safe avatar path — type might not include it, so cast
+  const avatarPath =
+    (me as { avatar_path?: string | null } | null | undefined)?.avatar_path ?? null;
+
   const fetchPendingCount = useServerFn(reportsPendingCount);
   const { data: pendingData } = useQuery({
     queryKey: ["reports-pending-count"],
@@ -126,7 +106,6 @@ function AdminLayout() {
   });
   const pendingReports = pendingData?.count ?? 0;
 
-  // Chat unread count
   const fetchChatUnread = useServerFn(chatUnreadCount);
   const { data: chatData } = useQuery({
     queryKey: ["chat-unread-count"],
@@ -136,7 +115,6 @@ function AdminLayout() {
   });
   const chatUnread = chatData?.count ?? 0;
 
-  // Pending memos count
   const { data: pendingMemos = 0 } = useQuery({
     queryKey: ["memos-pending-count"],
     queryFn: async () => {
@@ -150,14 +128,12 @@ function AdminLayout() {
     enabled: !!me?.isStaff,
   });
 
-  // Role guard
   useEffect(() => {
     if (!isLoading && me && !me.isStaff) {
       navigate({ to: "/account" });
     }
   }, [me, isLoading, navigate]);
 
-  // Moderator restriction
   useEffect(() => {
     if (!isLoading && me && me.isStaff && !me.isOwner) {
       const isAllowed = allowedForModerator.some(
@@ -170,7 +146,6 @@ function AdminLayout() {
     }
   }, [me, isLoading, pathname, navigate]);
 
-  // Close mobile drawer on route change
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
@@ -198,18 +173,12 @@ function AdminLayout() {
         {/* ============ Desktop Sidebar ============ */}
         <aside
           className="no-print sticky top-0 hidden h-screen w-64 shrink-0 flex-col lg:flex"
-          style={{
-            backgroundColor: "#2b1d14",
-            color: "#f2e8d5",
-          }}
+          style={{ backgroundColor: "#2b1d14", color: "#f2e8d5" }}
         >
           <div className="border-b p-5" style={{ borderColor: "#4a3324" }}>
             <p
               className="text-xl"
-              style={{
-                fontFamily: "'Tiro Bangla', serif",
-                color: "#f2e8d5",
-              }}
+              style={{ fontFamily: "'Tiro Bangla', serif", color: "#f2e8d5" }}
             >
               {SHOP.name}
             </p>
@@ -262,13 +231,24 @@ function AdminLayout() {
             </Link>
           </nav>
 
+          {/* Sidebar Footer with Avatar */}
           <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
-            <p className="font-semibold" style={{ color: "#f2e8d5" }}>
-              {me.full_name}
-            </p>
-            <p className="text-xs" style={{ color: "#c9924a" }}>
-              {roleLabel[me.isOwner ? "owner" : "moderator"]}
-            </p>
+            <div className="flex items-center gap-3">
+              <UserAvatar
+                path={avatarPath}
+                name={me.full_name ?? "?"}
+                size={38}
+                borderColor="#c9924a"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold" style={{ color: "#f2e8d5" }}>
+                  {me.full_name}
+                </p>
+                <p className="truncate text-xs" style={{ color: "#c9924a" }}>
+                  {roleLabel[me.isOwner ? "owner" : "moderator"]}
+                </p>
+              </div>
+            </div>
             <button
               onClick={logout}
               className="mt-3 flex items-center gap-2 text-sm transition-opacity"
@@ -283,22 +263,22 @@ function AdminLayout() {
           {/* ============ Mobile Header ============ */}
           <div
             className="no-print sticky top-0 z-30 flex items-center gap-3 border-b px-3 py-2.5 lg:hidden"
-            style={{
-              backgroundColor: "#2b1d14",
-              borderColor: "#4a3324",
-            }}
+            style={{ backgroundColor: "#2b1d14", borderColor: "#4a3324" }}
           >
             <button
               onClick={() => setDrawerOpen(true)}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
-              style={{
-                backgroundColor: "rgba(201,146,74,0.2)",
-                color: "#f2e8d5",
-              }}
+              style={{ backgroundColor: "rgba(201,146,74,0.2)", color: "#f2e8d5" }}
               aria-label="Menu"
             >
               <Menu className="h-5 w-5" />
             </button>
+            <UserAvatar
+              path={avatarPath}
+              name={me.full_name ?? "?"}
+              size={32}
+              borderColor="#c9924a"
+            />
             <p
               className="min-w-0 flex-1 truncate text-sm font-semibold"
               style={{ color: "#f2e8d5" }}
@@ -318,11 +298,6 @@ function AdminLayout() {
                 </span>
               )}
             </Link>
-            {pendingReports > 0 && (
-              <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
-                {pendingReports}
-              </span>
-            )}
             <button
               onClick={logout}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
@@ -342,10 +317,7 @@ function AdminLayout() {
             >
               <div
                 className="absolute left-0 top-0 h-full w-72 overflow-y-auto"
-                style={{
-                  backgroundColor: "#2b1d14",
-                  animation: "slideIn 200ms ease-out",
-                }}
+                style={{ backgroundColor: "#2b1d14", animation: "slideIn 200ms ease-out" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div
@@ -355,10 +327,7 @@ function AdminLayout() {
                   <div className="min-w-0">
                     <p
                       className="truncate text-lg"
-                      style={{
-                        fontFamily: "'Tiro Bangla', serif",
-                        color: "#f2e8d5",
-                      }}
+                      style={{ fontFamily: "'Tiro Bangla', serif", color: "#f2e8d5" }}
                     >
                       {SHOP.name}
                     </p>
@@ -420,13 +389,24 @@ function AdminLayout() {
                   </Link>
                 </nav>
 
+                {/* Mobile Drawer Footer with Avatar */}
                 <div className="border-t p-4" style={{ borderColor: "#4a3324" }}>
-                  <p className="text-sm font-semibold" style={{ color: "#f2e8d5" }}>
-                    {me.full_name}
-                  </p>
-                  <p className="text-xs" style={{ color: "#c9924a" }}>
-                    {roleLabel[me.isOwner ? "owner" : "moderator"]}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      path={avatarPath}
+                      name={me.full_name ?? "?"}
+                      size={40}
+                      borderColor="#c9924a"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold" style={{ color: "#f2e8d5" }}>
+                        {me.full_name}
+                      </p>
+                      <p className="truncate text-xs" style={{ color: "#c9924a" }}>
+                        {roleLabel[me.isOwner ? "owner" : "moderator"]}
+                      </p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => {
                       setDrawerOpen(false);
@@ -449,7 +429,6 @@ function AdminLayout() {
             </div>
           )}
 
-          {/* ============ Main Content ============ */}
           <main className="relative flex-1 p-3 md:p-8">
             <NoticePopup />
             <Outlet />
