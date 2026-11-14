@@ -1,29 +1,20 @@
-# Welcome to your Lovable project
+# আল হামিদ বস্ত্রালয়
 
-This project was built with [Lovable](https://lovable.dev).
+ফেনীর জে বি রোডে ২৬ বছরের পুরনো পাইকারি ও খুচরা কাপড়ের দোকানের ডিজিটাল খাতা ও মেমো ব্যবস্থা।
 
-## Build with Lovable
+## কী আছে
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+- মেমো তৈরি, কনফার্ম, প্রিন্ট ও শেয়ার
+- পাইকারি ও খুচরা কাস্টমারের হিসাব
+- ডেইলি ক্যাশ, খরচ, জমা
+- সাপ্লায়ার ও হাওলাত খাতা
+- এলাকা ভিত্তিক কালেকশন
+- চ্যাট (টেক্সট, ছবি, ভয়েস)
+- রিপোর্ট ও লো স্টক অ্যালার্ট
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+## চালানো
 
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+```bash
+npm install
+cp .env.example .env.local   # Supabase keys বসাও
+npm run dev                  # http://localhost:8080

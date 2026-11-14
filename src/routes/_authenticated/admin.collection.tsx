@@ -1,8 +1,5 @@
 // src/routes/_authenticated/admin.collection.tsx
 // এলাকা-ভিত্তিক কালেকশন entry
-//
-// 🐛 FIX: "হিসাব দেখুন" — Link ব্যবহার (nav এর বদলে, guaranteed navigation)
-// 🐛 FIX: Transaction-safe save with rollback
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -10,7 +7,7 @@ import { HandCoins, Save, AlertCircle, ArrowLeft, User, Calendar } from "lucide-
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
 import { taka, toBnDigits, todayISO, englishDateBn, weekdayBn, num } from "@/lib/shop";
-import { partyDue } from "@/lib/ledger";
+import { partiesDueBatch } from "@/lib/ledger";
 import { BackButton } from "@/components/shop/BackButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -94,10 +91,11 @@ function CollectionPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const out: Record<string, number> = {};
-      for (const p of parties) {
-        out[p.id] = await partyDue(p.id);
+      if (parties.length === 0) {
+        setDues({});
+        return;
       }
+      const out = await partiesDueBatch(parties.map((p) => p.id));
       if (!cancelled) setDues(out);
     })();
     return () => {
@@ -191,7 +189,7 @@ function CollectionPage() {
       }
 
       toast.success(
-        `✅ কালেকশন সেভ হয়েছে — ${toBnDigits(filledCount)} জন কাস্টমার, মোট ${taka(totalCollection)}`,
+        `কালেকশন সেভ হয়েছে — ${toBnDigits(filledCount)} জন কাস্টমার, মোট ${taka(totalCollection)}`,
       );
 
       qc.invalidateQueries({ queryKey: ["day-entries"] });
@@ -206,10 +204,18 @@ function CollectionPage() {
       const errMsg = (e as Error).message;
 
       if (dayEntryIds.length > 0) {
-        try { await supabase.from("day_entries").delete().in("id", dayEntryIds); } catch { /* ignore */ }
+        try {
+          await supabase.from("day_entries").delete().in("id", dayEntryIds);
+        } catch {
+          /* ignore */
+        }
       }
       if (collectionId) {
-        try { await supabase.from("collections").delete().eq("id", collectionId); } catch { /* ignore */ }
+        try {
+          await supabase.from("collections").delete().eq("id", collectionId);
+        } catch {
+          /* ignore */
+        }
       }
 
       toast.error(errMsg + " — কোনো partial data save হয়নি");
@@ -222,7 +228,10 @@ function CollectionPage() {
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="no-print flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin" />
-        <h1 className="text-2xl md:text-3xl" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
+        <h1
+          className="text-2xl md:text-3xl"
+          style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
+        >
           কালেকশন
         </h1>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -232,7 +241,6 @@ function CollectionPage() {
             onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
             className="h-9 rounded-md border bg-card px-3 text-sm"
           />
-          {/* 🐛 FIX: Link ব্যবহার */}
           <Link to="/admin/collection/history">
             <Button variant="outline">
               <ArrowLeft /> হিসাব দেখুন
@@ -243,7 +251,10 @@ function CollectionPage() {
 
       <div
         className="rounded-2xl p-5 shadow-lg"
-        style={{ background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)", color: "#f8f3ea" }}
+        style={{
+          background: "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
+          color: "#f8f3ea",
+        }}
       >
         <p className="text-sm" style={{ color: "#d9a85a" }}>
           <Calendar className="mr-1 inline h-4 w-4" />
@@ -251,10 +262,15 @@ function CollectionPage() {
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-4">
           <label className="block">
-            <span className="text-xs" style={{ color: "#d9a85a" }}>এলাকা select করুন</span>
+            <span className="text-xs" style={{ color: "#d9a85a" }}>
+              এলাকা select করুন
+            </span>
             <select
               value={selectedAreaId}
-              onChange={(e) => { setSelectedAreaId(e.target.value); setEntries({}); }}
+              onChange={(e) => {
+                setSelectedAreaId(e.target.value);
+                setEntries({});
+              }}
               className="mt-1 block h-10 min-w-[220px] rounded-md border-0 bg-[#fdfaf5] px-3 text-sm"
               style={{ color: "#3a2318" }}
             >
@@ -262,7 +278,9 @@ function CollectionPage() {
               {todayAreas.length > 0 && (
                 <optgroup label={`আজকের এলাকা (${weekdayBn(selectedDate)})`}>
                   {todayAreas.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name_bn || a.name}</option>
+                    <option key={a.id} value={a.id}>
+                      {a.name_bn || a.name}
+                    </option>
                   ))}
                 </optgroup>
               )}
@@ -271,7 +289,8 @@ function CollectionPage() {
                   .filter((a) => a.day_of_week !== dayOfWeek)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name_bn || a.name} ({["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
+                      {a.name_bn || a.name} (
+                      {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][a.day_of_week]})
                     </option>
                   ))}
               </optgroup>
@@ -279,9 +298,15 @@ function CollectionPage() {
           </label>
 
           <div className="ml-auto text-right">
-            <p className="text-xs" style={{ color: "#d9a85a" }}>মোট কালেকশন</p>
-            <p className="text-2xl font-bold" style={{ color: "#ffffff" }}>{taka(totalCollection)}</p>
-            <p className="text-xs" style={{ color: "#e8dcc8" }}>{toBnDigits(filledCount)} জন কাস্টমার</p>
+            <p className="text-xs" style={{ color: "#d9a85a" }}>
+              মোট কালেকশন
+            </p>
+            <p className="text-2xl font-bold" style={{ color: "#ffffff" }}>
+              {taka(totalCollection)}
+            </p>
+            <p className="text-xs" style={{ color: "#e8dcc8" }}>
+              {toBnDigits(filledCount)} জন কাস্টমার
+            </p>
           </div>
         </div>
       </div>
@@ -289,12 +314,16 @@ function CollectionPage() {
       {!selectedAreaId ? (
         <div className="rounded-2xl border-2 border-dashed bg-card py-16 text-center">
           <AlertCircle className="mx-auto h-10 w-10" style={{ color: "#c9924a" }} />
-          <p className="mt-2" style={{ color: "#7a6558" }}>উপরে এলাকা select করুন</p>
+          <p className="mt-2" style={{ color: "#7a6558" }}>
+            উপরে এলাকা select করুন
+          </p>
         </div>
       ) : parties.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed bg-card py-16 text-center">
           <AlertCircle className="mx-auto h-10 w-10" style={{ color: "#c9924a" }} />
-          <p className="mt-2" style={{ color: "#7a6558" }}>এই এলাকায় কোনো কাস্টমার নেই।</p>
+          <p className="mt-2" style={{ color: "#7a6558" }}>
+            এই এলাকায় কোনো কাস্টমার নেই।
+          </p>
           <p className="mt-1 text-xs" style={{ color: "#7a6558" }}>
             /admin/users এ গিয়ে কাস্টমার তৈরি করুন এবং এলাকা select করুন।
           </p>
@@ -303,9 +332,14 @@ function CollectionPage() {
         <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
           <div
             className="border-b px-4 py-3"
-            style={{ background: "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))" }}
+            style={{
+              background: "linear-gradient(90deg, rgba(201,146,74,0.15), rgba(201,146,74,0.05))",
+            }}
           >
-            <h2 className="text-lg" style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}>
+            <h2
+              className="text-lg"
+              style={{ fontFamily: "'Tiro Bangla', serif", color: "#3a2318" }}
+            >
               {currentArea?.name_bn || currentArea?.name} — {toBnDigits(parties.length)} জন কাস্টমার
             </h2>
           </div>
@@ -327,15 +361,35 @@ function CollectionPage() {
                   const val = entries[p.id] ?? "";
                   const amount = num(val);
                   return (
-                    <tr key={p.id} className={`border-t transition ${amount > 0 ? "bg-green-50" : ""}`}>
-                      <td className="px-3 py-2 tabular-nums" style={{ color: "#7a6558" }}>{toBnDigits(i + 1)}</td>
-                      <td className="px-3 py-2 tabular-nums" style={{ color: "#3a2318" }}>{toBnDigits(p.serial)}</td>
-                      <td className="px-3 py-2">
-                        <p className="font-semibold" style={{ color: "#3a2318" }}>{p.shop_name}</p>
-                        {p.owner_name && <p className="text-xs" style={{ color: "#7a6558" }}>{p.owner_name}</p>}
-                        {p.mobile && <p className="text-xs tabular-nums" style={{ color: "#7a6558" }}>{toBnDigits(p.mobile)}</p>}
+                    <tr
+                      key={p.id}
+                      className={`border-t transition ${amount > 0 ? "bg-green-50" : ""}`}
+                    >
+                      <td className="px-3 py-2 tabular-nums" style={{ color: "#7a6558" }}>
+                        {toBnDigits(i + 1)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums" style={{ color: due > 0 ? "#a83e2c" : "#2d7a4f" }}>
+                      <td className="px-3 py-2 tabular-nums" style={{ color: "#3a2318" }}>
+                        {toBnDigits(p.serial)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <p className="font-semibold" style={{ color: "#3a2318" }}>
+                          {p.shop_name}
+                        </p>
+                        {p.owner_name && (
+                          <p className="text-xs" style={{ color: "#7a6558" }}>
+                            {p.owner_name}
+                          </p>
+                        )}
+                        {p.mobile && (
+                          <p className="text-xs tabular-nums" style={{ color: "#7a6558" }}>
+                            {toBnDigits(p.mobile)}
+                          </p>
+                        )}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-right tabular-nums"
+                        style={{ color: due > 0 ? "#a83e2c" : "#2d7a4f" }}
+                      >
                         {taka(due)}
                       </td>
                       <td className="px-3 py-2">
@@ -357,8 +411,12 @@ function CollectionPage() {
               </tbody>
               <tfoot style={{ backgroundColor: "#3a2318", color: "#f8f3ea" }}>
                 <tr>
-                  <td colSpan={4} className="px-4 py-3 text-right text-lg font-semibold">সর্বমোট</td>
-                  <td className="px-3 py-3 text-right text-xl font-bold tabular-nums">{taka(totalCollection)}</td>
+                  <td colSpan={4} className="px-4 py-3 text-right text-lg font-semibold">
+                    সর্বমোট
+                  </td>
+                  <td className="px-3 py-3 text-right text-xl font-bold tabular-nums">
+                    {taka(totalCollection)}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -369,7 +427,9 @@ function CollectionPage() {
       {selectedAreaId && parties.length > 0 && (
         <div className="rounded-2xl border bg-card p-5 shadow-card">
           <label className="block text-sm">
-            <span className="text-xs" style={{ color: "#7a6558" }}>নোট (ঐচ্ছিক)</span>
+            <span className="text-xs" style={{ color: "#7a6558" }}>
+              নোট (ঐচ্ছিক)
+            </span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -388,12 +448,18 @@ function CollectionPage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => { if (confirm("সব entry মুছবেন?")) setEntries({}); }}
+                onClick={() => {
+                  if (confirm("সব entry মুছবেন?")) setEntries({});
+                }}
                 disabled={busy}
               >
                 রিসেট
               </Button>
-              <Button variant="coffee" onClick={saveCollection} disabled={busy || filledCount === 0}>
+              <Button
+                variant="coffee"
+                onClick={saveCollection}
+                disabled={busy || filledCount === 0}
+              >
                 <Save /> {busy ? "সেভ হচ্ছে…" : `সেভ করুন (${toBnDigits(filledCount)} জন)`}
               </Button>
             </div>

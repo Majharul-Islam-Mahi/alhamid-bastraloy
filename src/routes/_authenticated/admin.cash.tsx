@@ -14,7 +14,6 @@ export const Route = createFileRoute("/_authenticated/admin/cash")({
 
 function Cash() {
   const d = todayISO();
-
   const { data: sum } = useQuery({
     queryKey: ["day-summary", d],
     queryFn: async () => (await supabase.rpc("day_summary", { _d: d })).data?.[0],
@@ -34,51 +33,41 @@ function Cash() {
   });
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      {/* Header with Back */}
+    <div className="mx-auto max-w-5xl space-y-5 px-1 md:space-y-6 md:px-0">
       <div className="flex flex-wrap items-center gap-3">
         <BackButton fallback="/admin" />
-        <div>
-          <h1 className="font-display text-3xl text-primary">ক্যাশ ম্যানেজমেন্ট</h1>
-          <p className="text-sm text-muted-foreground">{englishDateBn(d)}</p>
-        </div>
+        <h1 className="text-2xl md:text-3xl">ক্যাশ ম্যানেজমেন্ট</h1>
+        <span className="text-sm text-muted-foreground">{englishDateBn(d)}</span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card icon={<TrendingUp />} label="নগদ বিক্রি" value={sum?.sales} tone="text-success" />
         <Card icon={<TrendingDown />} label="খরচ" value={sum?.expenses} tone="text-destructive" />
-        <Card icon={<Wallet />} label="আজকের ইজা" value={sum?.closing} tone="text-primary" />
-        <Card
-          icon={<Coins />}
-          label="ক্যাশ বাক্সে"
-          value={sum?.cash}
-          tone="text-accent-foreground"
-        />
+        <Card icon={<Wallet />} label="চলমান ক্যাশ" value={sum?.closing} tone="text-primary" />
+        <Card icon={<Coins />} label="ক্যাশ বাক্সে" value={sum?.cash} tone="text-accent-foreground" />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
-        <div className="border-b bg-secondary px-5 py-3">
-          <h2 className="font-display text-xl text-primary">আজকের সাম্প্রতিক এন্ট্রি</h2>
-        </div>
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <h2 className="border-b px-4 py-3 text-lg">আজকের সাম্প্রতিক এন্ট্রি</h2>
         <table className="w-full text-sm">
-          <thead className="bg-muted/60 text-xs text-muted-foreground">
+          <thead className="bg-muted/50">
             <tr>
-              <th className="px-4 py-2 text-left">ধরন</th>
-              <th className="px-4 py-2 text-left">বিবরণ</th>
-              <th className="px-4 py-2 text-right">টাকা</th>
+              <th className="p-2 text-left">ধরন</th>
+              <th className="p-2 text-left">বিবরণ</th>
+              <th className="p-2 text-right">টাকা</th>
             </tr>
           </thead>
           <tbody>
-            {(recent ?? []).map((e) => (
+            {(recent ?? []).map((e: { id: string; kind: string; amount: number; details: string | null; name: string | null }) => (
               <tr key={e.id} className="border-t">
-                <td className="px-4 py-2">{label(e.kind)}</td>
-                <td className="px-4 py-2">{e.details ?? e.name ?? "—"}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{taka(e.amount)}</td>
+                <td className="p-2">{label(e.kind)}</td>
+                <td className="p-2">{e.details ?? e.name ?? "—"}</td>
+                <td className="p-2 text-right">{taka(e.amount)}</td>
               </tr>
             ))}
             {(recent ?? []).length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={3} className="p-6 text-center text-muted-foreground">
                   কোনো এন্ট্রি নেই
                 </td>
               </tr>
@@ -102,12 +91,10 @@ function Card({
   tone: string;
 }) {
   return (
-    <div className="rounded-2xl border bg-card p-5 shadow-card">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-muted ${tone}`}>
-        {icon}
-      </div>
-      <p className="mt-3 text-sm text-muted-foreground">{label}</p>
-      <p className={`mt-1 font-display text-2xl tabular-nums ${tone}`}>{taka(value)}</p>
+    <div className="rounded-xl border bg-card p-4">
+      <div className={`mb-2 ${tone}`}>{icon}</div>
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xl font-semibold">{taka(value)}</div>
     </div>
   );
 }

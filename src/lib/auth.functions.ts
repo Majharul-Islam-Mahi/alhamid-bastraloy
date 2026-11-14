@@ -14,10 +14,7 @@ const digits = (s: string) =>
 
 export const staffEmail = (mobile: string) => `staff.${digits(mobile)}@${DOMAIN}`;
 export const customerEmail = (serial: string) =>
-  `cust.${serial
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")}@${DOMAIN}`;
+  `cust.${serial.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}@${DOMAIN}`;
 
 function publicClient() {
   const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
@@ -39,35 +36,31 @@ const credSchema = z.object({
   mode: z.enum(["staff", "customer"]),
   serial: z.string().trim().max(50).optional(),
   mobile: z.string().trim().min(6).max(20),
-  password: z.string().min(4).max(100),
+  password: z.string().min(6).max(100),
 });
 
 async function checkCreds(data: z.infer<typeof credSchema>) {
-  const email = data.mode === "staff" ? staffEmail(data.mobile) : customerEmail(data.serial ?? "");
-
+  const email =
+    data.mode === "staff" ? staffEmail(data.mobile) : customerEmail(data.serial ?? "");
   const pc = publicClient();
   const { data: s, error } = await pc.auth.signInWithPassword({
     email,
     password: data.password,
   });
-
   if (error || !s.user) {
     throw new Error("তথ্য মিলেনি। মোবাইল/সিরিয়াল বা পাসওয়ার্ড ভুল।");
   }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
   const { data: prof } = await supabaseAdmin
     .from("profiles")
     .select("*")
     .eq("id", s.user.id)
     .single();
-
   const { data: roles } = await supabaseAdmin
     .from("user_roles")
     .select("role")
     .eq("user_id", s.user.id);
-
   const r = (roles ?? []).map((x) => x.role);
 
   if (!prof || digits(prof.mobile) !== digits(data.mobile)) {
@@ -87,7 +80,6 @@ async function checkCreds(data: z.infer<typeof credSchema>) {
 export const requestOtp = createServerFn({ method: "POST" })
   .validator((d) => credSchema.parse(d))
   .handler(async ({ data }) => {
-    // Rate limit: প্রতি মোবাইলে ৫ বার / ১৫ মিনিট
     const rl = await checkRateLimit(`login:${digits(data.mobile)}`, 5, 15);
     if (!rl.ok) {
       await logAction({
@@ -131,7 +123,6 @@ export const requestOtp = createServerFn({ method: "POST" })
     if (error) throw new Error("OTP তৈরি করা যায়নি");
 
     const result = await sendOtp(digits(data.mobile), code);
-
     if (!result.ok) {
       throw new Error(result.error ?? "OTP পাঠানো যায়নি। দোকানে যোগাযোগ করুন।");
     }
@@ -155,7 +146,6 @@ export const verifyOtp = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    // OTP ভুলের জন্য আলাদা rate limit
     const rl = await checkRateLimit(`otp-verify:${digits(data.mobile)}`, 10, 15);
     if (!rl.ok) {
       throw new Error(
@@ -218,11 +208,20 @@ const newUserSchema = z.object({
   shop_name: z.string().trim().max(150).optional(),
   address: z.string().trim().max(300).optional(),
   location: z.string().trim().max(150).optional(),
+  area_id: z.string().uuid().optional(),
 });
 
 async function createUserInternal(d: z.infer<typeof newUserSchema>) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  if (d.role === "customer" && !d.serial) throw new Error("সিরিয়াল নম্বর দিতে হবে");
+
+  // সিরিয়াল সার্ভার থেকেই তৈরি হয় — UI থেকে নয়
+  if (d.role === "customer" && !d.serial) {
+    const { data: s, error: sErr } = await supabaseAdmin.rpc("next_serial", {
+      _kind: "user",
+    });
+    if (sErr || !s) throw new Error("সিরিয়াল তৈরি করা যায়নি");
+    d.serial = s as string;
+  }
 
   const email = d.role === "customer" ? customerEmail(d.serial!) : staffEmail(d.mobile);
 
@@ -280,6 +279,7 @@ async function createUserInternal(d: z.infer<typeof newUserSchema>) {
       mobile: digits(d.mobile),
       ...(d.address !== undefined ? { address: d.address } : {}),
       ...(d.location !== undefined ? { location: d.location } : {}),
+      ...(d.area_id !== undefined ? { area_id: d.area_id } : {}),
       user_id: id,
     });
     if (partyErr) {
@@ -330,56 +330,17 @@ export const createAccount = createServerFn({ method: "POST" })
       targetType: "user",
       targetId: newUserId,
       targetName: data.full_name,
-      details: {
-        role: data.role,
-        mobile: data.mobile,
-        serial: data.serial,
-      },
+      details: { role: data.role, mobile: data.mobile, serial: data.serial },
     });
-    return { ok: true };
-  });
-
-// পুরাতন resetPassword (2FA ছাড়া) — রাখা হলো backward compatibility এর জন্য
-export const resetPassword = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((d) =>
-    z.object({ userId: z.string().uuid(), password: z.string().min(6).max(100) }).parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    await assertOwner(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: targetProf } = await supabaseAdmin
-      .from("profiles")
-      .select("full_name")
-      .eq("id", data.userId)
-      .maybeSingle();
-
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
-      password: data.password,
-    });
-    if (error) throw new Error("পাসওয়ার্ড পরিবর্তন হয়নি");
-
-    await logAction({
-      actorId: context.userId,
-      action: "user.password_reset",
-      targetType: "user",
-      targetId: data.userId,
-      targetName: targetProf?.full_name,
-    });
-
     return { ok: true };
   });
 
 // ---- 2FA for destructive actions ----
-
-// Admin এর মোবাইলে OTP পাঠায় — sensitive action করার আগে
 export const requestDestructiveOtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Admin এর role check
     const { data: roles } = await context.supabase
       .from("user_roles")
       .select("role")
@@ -389,18 +350,15 @@ export const requestDestructiveOtp = createServerFn({ method: "POST" })
       throw new Error("শুধু মালিক এই কাজ করতে পারবেন");
     }
 
-    // Admin এর profile থেকে mobile
     const { data: prof } = await supabaseAdmin
       .from("profiles")
       .select("mobile,full_name")
       .eq("id", context.userId)
       .single();
-
     if (!prof?.mobile) {
       throw new Error("আপনার প্রোফাইলে মোবাইল নাম্বার নেই");
     }
 
-    // Rate limit: 3 বার / 15 মিনিট
     const rl = await checkRateLimit(`destructive-otp:${context.userId}`, 3, 15);
     if (!rl.ok) {
       throw new Error(
@@ -418,7 +376,6 @@ export const requestDestructiveOtp = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-
     if (error) throw new Error("OTP তৈরি করা যায়নি");
 
     const result = await sendOtp(digits(prof.mobile), code);
@@ -427,7 +384,6 @@ export const requestDestructiveOtp = createServerFn({ method: "POST" })
     }
 
     const maskedMobile = `***${digits(prof.mobile).slice(-4)}`;
-
     return {
       challengeId: row.id,
       channel: result.channel,
@@ -437,7 +393,6 @@ export const requestDestructiveOtp = createServerFn({ method: "POST" })
     };
   });
 
-// Destructive action + OTP verification একসাথে
 export const resetPasswordWithOtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d) =>
@@ -454,7 +409,6 @@ export const resetPasswordWithOtp = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // OTP যাচাই
     const { data: otp } = await supabaseAdmin
       .from("otp_codes")
       .select("*")
@@ -472,7 +426,6 @@ export const resetPasswordWithOtp = createServerFn({ method: "POST" })
     if (otp.code !== digits(data.code)) {
       throw new Error("OTP কোড ভুল।");
     }
-
     await supabaseAdmin.from("otp_codes").update({ used: true }).eq("id", otp.id);
 
     const { data: targetProf } = await supabaseAdmin
@@ -493,6 +446,69 @@ export const resetPasswordWithOtp = createServerFn({ method: "POST" })
       targetId: data.targetUserId,
       targetName: targetProf?.full_name,
       details: { via: "2FA" },
+    });
+
+    return { ok: true };
+  });
+
+// ---- নতুন: অ্যাকাউন্ট মুছে ফেলা (OTP সহ) ----
+export const deleteAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d) =>
+    z
+      .object({
+        targetUserId: z.string().uuid(),
+        challengeId: z.string().uuid(),
+        code: z.string().trim().length(6),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: otp } = await supabaseAdmin
+      .from("otp_codes")
+      .select("*")
+      .eq("id", data.challengeId)
+      .single();
+
+    if (
+      !otp ||
+      otp.user_id !== context.userId ||
+      otp.used ||
+      new Date(otp.expires_at) < new Date()
+    ) {
+      throw new Error("OTP মেয়াদোত্তীর্ণ বা অবৈধ।");
+    }
+    if (otp.code !== digits(data.code)) {
+      throw new Error("OTP কোড ভুল।");
+    }
+    await supabaseAdmin.from("otp_codes").update({ used: true }).eq("id", otp.id);
+
+    if (data.targetUserId === context.userId) {
+      throw new Error("নিজের অ্যাকাউন্ট মুছবেন না");
+    }
+
+    const { data: targetProf } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", data.targetUserId)
+      .maybeSingle();
+
+    await supabaseAdmin.from("parties").delete().eq("user_id", data.targetUserId);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.targetUserId);
+    await supabaseAdmin.from("profiles").delete().eq("id", data.targetUserId);
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.targetUserId);
+    if (error) throw new Error("অ্যাকাউন্ট মুছতে সমস্যা হয়েছে");
+
+    await logAction({
+      actorId: context.userId,
+      action: "user.delete",
+      targetType: "user",
+      targetId: data.targetUserId,
+      targetName: targetProf?.full_name,
     });
 
     return { ok: true };
