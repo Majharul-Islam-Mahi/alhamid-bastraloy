@@ -34,4 +34,4 @@ dist-ssr
 # Environment variables (secret — git এ যাবে না)
 .env
 .env.local
-.env.*.local
+.env.*.localsupabase/.temp/

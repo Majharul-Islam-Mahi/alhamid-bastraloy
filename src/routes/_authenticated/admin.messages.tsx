@@ -404,7 +404,6 @@ function AdminMessages() {
                   style={{ borderColor: "#eadfcc" }}
                 >
                   <div className="flex items-start gap-3">
-                    {/* 🎨 Avatar */}
                     <UserAvatar
                       path={c.avatar_path}
                       name={c.shop_name || c.full_name || "?"}
@@ -455,7 +454,6 @@ function AdminMessages() {
             </div>
           ) : (
             <>
-              {/* 🎨 Chat header with avatar */}
               <div className="flex items-center gap-3 border-b bg-card p-3" style={{ borderColor: "#dbcbb2" }}>
                 <button onClick={() => setSelected(null)} className="rounded-full p-1 text-muted-foreground hover:bg-accent md:hidden">
                   ←
@@ -501,6 +499,9 @@ function AdminMessages() {
                             msg={{ ...m, file_url: signedMap[m.id] ?? null }}
                             isMine={m.sender_role === "admin"}
                             onInfoClick={(mm) => setInfoMsg(mm as Message)}
+                            avatarPath={selectedConv?.avatar_path ?? customer?.avatar_path} // 🎯 Avatar Path
+                            senderName={party?.shop_name || customer?.full_name || "Customer"} // 🎯 Name for fallback avatar
+                            onVoicePlay={() => markSeen({ data: { customerId: selected! } })} // 🎯 Voice Play = Seen
                           />
                         ))}
                       </div>
