@@ -1,6 +1,5 @@
 // src/routes/index.tsx
 // হোমপেজ — দোকানের তথ্য, ছবি, বর্ণনা ও পাশে লগইন প্যানেল
-// [UPDATED] Hero logo: /logo-hero.png with "আ" fallback
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,6 +19,7 @@ import { Footer } from "@/components/shop/Footer";
 import { LoginForm } from "@/components/shop/LoginForm";
 import { PWAInstallPrompt } from "@/components/shop/PWAInstallPrompt";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMe } from "@/hooks/use-me";
 import { useShopSettings, uploadShopImage } from "@/hooks/use-shop-settings";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +76,10 @@ function Home() {
   const qc = useQueryClient();
   const [heroLogoError, setHeroLogoError] = useState(false);
 
+  // Avatar path — me type may not include it, so cast safely
+  const avatarPath =
+    (me as { avatar_path?: string | null } | null | undefined)?.avatar_path ?? null;
+
   async function setImage(
     field: "owner_photo_path" | "shop_photo_path" | "gallery",
     f: File,
@@ -106,7 +110,6 @@ function Home() {
 
       {/* ========== HERO ========== */}
       <section className="relative overflow-hidden">
-        {/* Background image */}
         <img
           src={s?.shopPhoto ?? heroImg}
           alt="আল হামিদ বস্ত্রালয়ের শোরুম"
@@ -114,7 +117,6 @@ function Home() {
           height={912}
           className="absolute inset-0 h-full w-full object-cover"
         />
-        {/* Overlay */}
         <div
           className="absolute inset-0"
           style={{
@@ -122,7 +124,6 @@ function Home() {
               "linear-gradient(180deg, rgba(58,35,24,0.92) 0%, rgba(58,35,24,0.85) 50%, rgba(58,35,24,0.95) 100%)",
           }}
         />
-        {/* Weave pattern */}
         <div
           className="pointer-events-none absolute inset-0 opacity-15"
           style={{
@@ -134,7 +135,6 @@ function Home() {
         <div className="relative mx-auto grid max-w-7xl gap-6 px-4 py-8 md:gap-10 md:py-16 lg:grid-cols-[1fr_420px] lg:py-20">
           {/* ---- Left: brand info ---- */}
           <div className="text-center lg:text-left" style={{ color: "#f8f3ea" }}>
-            {/* Hero Logo — /logo-hero.png না থাকলে "আ" */}
             <div className="mb-4 flex justify-center lg:justify-start">
               <div
                 className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full shadow-lg md:h-20 md:w-20"
@@ -161,7 +161,6 @@ function Home() {
               </div>
             </div>
 
-            {/* Bismillah chip */}
             <div className="mb-4 flex justify-center lg:justify-start">
               <span
                 className="rounded-full px-4 py-1.5 text-xs md:text-sm"
@@ -176,7 +175,6 @@ function Home() {
               </span>
             </div>
 
-            {/* Shop name */}
             <h1
               className="text-4xl leading-tight sm:text-5xl md:text-6xl lg:text-7xl"
               style={{
@@ -188,7 +186,6 @@ function Home() {
               {SHOP.name}
             </h1>
 
-            {/* Address + meta */}
             <div className="mt-4 flex flex-col items-center gap-2 sm:flex-row sm:justify-center lg:justify-start">
               <span
                 className="flex items-center gap-1.5 text-sm md:text-base"
@@ -202,7 +199,6 @@ function Home() {
               </span>
             </div>
 
-            {/* Description */}
             <p
               className="mx-auto mt-5 max-w-xl text-sm leading-relaxed md:text-base lg:mx-0"
               style={{ color: "#e8dcc8" }}
@@ -211,7 +207,6 @@ function Home() {
                 "ফেনীর বিশ্বস্ত পাইকারি ও খুচরা কাপড়ের দোকান। সরাসরি কারখানা থেকে মানসম্মত কাপড়।"}
             </p>
 
-            {/* Feature chips */}
             <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
               <FeatureChip
                 icon={<Store className="h-3.5 w-3.5" />}
@@ -237,20 +232,19 @@ function Home() {
             )}
           </div>
 
-          {/* ---- Right: login panel ---- */}
+          {/* ---- Right: login/welcome panel ---- */}
           <div className="mx-auto w-full max-w-md lg:mx-0 lg:max-w-none">
             <div className="rounded-2xl border border-white/10 bg-card p-5 shadow-2xl backdrop-blur-sm md:p-6">
               {me ? (
                 <div className="py-6 text-center">
-                  <div
-                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-full"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #3a2318 0%, #5a3a22 100%)",
-                      color: "#f8f3ea",
-                    }}
-                  >
-                    <User className="h-7 w-7" />
+                  {/* Avatar replaces the icon */}
+                  <div className="mx-auto flex justify-center">
+                    <UserAvatar
+                      path={avatarPath}
+                      name={me.full_name ?? "?"}
+                      size={64}
+                      borderColor="#d9a85a"
+                    />
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground">
                     স্বাগতম
@@ -306,7 +300,6 @@ function Home() {
 
       {/* ========== OWNER + CONTACT ========== */}
       <section className="mx-auto grid max-w-7xl gap-5 px-4 py-10 md:gap-6 md:py-14 lg:grid-cols-3">
-        {/* Owner card */}
         <div className="rounded-2xl bg-card p-5 shadow-card md:p-6 lg:col-span-1">
           <div
             className="relative mx-auto h-32 w-32 overflow-hidden rounded-full border-4 md:h-40 md:w-40"
@@ -356,7 +349,6 @@ function Home() {
           </p>
         </div>
 
-        {/* Info cards */}
         <div className="grid gap-4 sm:grid-cols-2 md:gap-5 lg:col-span-2">
           <InfoCard
             icon={<User />}
@@ -421,7 +413,6 @@ function Home() {
   );
 }
 
-// ---- Feature chip ----
 function FeatureChip({
   icon,
   label,
@@ -444,7 +435,6 @@ function FeatureChip({
   );
 }
 
-// ---- Info card ----
 function InfoCard({
   icon,
   title,
